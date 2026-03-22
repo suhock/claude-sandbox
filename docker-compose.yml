@@ -1,0 +1,49 @@
+networks:
+  claude-net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+services:
+  proxy:
+    build: ./proxy
+    container_name: claude-proxy
+    networks:
+      claude-net:
+        ipv4_address: 172.28.0.2
+      default:
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "3128"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  claude:
+    build: ./claude
+    container_name: claude-code
+    depends_on:
+      proxy:
+        condition: service_healthy
+    networks:
+      - claude-net
+    hostname: claude-sandbox
+    dns:
+      - 172.28.0.2
+    environment:
+      - HTTPS_PROXY=http://172.28.0.2:3128
+      - HTTP_PROXY=http://172.28.0.2:3128
+      - NO_PROXY=localhost,127.0.0.1
+    volumes:
+      - ${DEV_DIR:-/dev/null}:/workspace
+      - ${CLAUDE_DIR:-/dev/null}:/home/claude/.claude
+      - ${CLAUDE_JSON:-/dev/null}:/home/claude/.claude.json
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stdin_open: true
+    tty: true
+    command: claude --dangerously-skip-permissions
