@@ -22,8 +22,7 @@ services:
       start_period: 5s
 
   claude:
-    build: ./claude
-    container_name: claude-code
+    build: ./claude-dotnet
     depends_on:
       proxy:
         condition: service_healthy
@@ -36,10 +35,13 @@ services:
       - HTTPS_PROXY=http://172.28.0.2:3128
       - HTTP_PROXY=http://172.28.0.2:3128
       - NO_PROXY=localhost,127.0.0.1
+      - DISABLE_AUTOUPDATER=1
     volumes:
       - ${DEV_DIR:-/dev/null}:/workspace
-      - ${CLAUDE_DIR:-/dev/null}:/home/claude/.claude
-      - ${CLAUDE_JSON:-/dev/null}:/home/claude/.claude.json
+      - ${HOME:-/dev/null}/.nuget/packages:/home/claude/.nuget/packages
+      - ${CLAUDE_STATE_DIR:-/dev/null}:/home/claude/.claude
+      - ${CLAUDE_STATE_DIR:-/dev/null}/.claude.json:/home/claude/.claude.json
+      - ${HOST_PLUGINS_DIR:-/dev/null}:/host-plugins:ro
     cap_drop:
       - ALL
     security_opt:
