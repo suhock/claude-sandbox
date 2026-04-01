@@ -1,5 +1,6 @@
 networks:
   claude-net:
+    name: claude-net
     driver: bridge
     internal: true
     ipam:
@@ -27,25 +28,23 @@ services:
       proxy:
         condition: service_healthy
     networks:
-      - claude-net
+      claude-net:
+      default:
     hostname: claude-sandbox
     dns:
       - 172.28.0.2
+    ports:
+      - "${CLAUDE_SSH_PORT:-2222}:22"
     environment:
       - HTTPS_PROXY=http://172.28.0.2:3128
       - HTTP_PROXY=http://172.28.0.2:3128
       - NO_PROXY=localhost,127.0.0.1
       - DISABLE_AUTOUPDATER=1
+      - TERM=xterm-256color
     volumes:
       - ${DEV_DIR:-/dev/null}:/workspace
       - ${HOME:-/dev/null}/.nuget/packages:/home/claude/.nuget/packages
       - ${CLAUDE_STATE_DIR:-/dev/null}:/home/claude/.claude
       - ${CLAUDE_STATE_DIR:-/dev/null}/.claude.json:/home/claude/.claude.json
       - ${HOST_PLUGINS_DIR:-/dev/null}:/host-plugins:ro
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    stdin_open: true
-    tty: true
-    command: claude --dangerously-skip-permissions
+      - ${HOST_SSH_DIR:-/dev/null}:/host-ssh-keys:ro

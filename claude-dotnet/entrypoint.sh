@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Sync host plugins into the writable state directory
 if [ -d /host-plugins ]; then
     mkdir -p ~/.claude/plugins
@@ -24,4 +24,28 @@ fi
 # Mark workspace as safe for git (bind mount has different ownership)
 git config --global --add safe.directory /workspace
 
-exec "$@"
+# Import authorized keys from mounted host keys
+if [ -d /host-ssh-keys ]; then
+    cat /host-ssh-keys/*.pub >> ~/.ssh/authorized_keys 2>/dev/null
+    chmod 600 ~/.ssh/authorized_keys 2>/dev/null
+fi
+
+# Start sshd (needs root, use sudo)
+sudo /usr/sbin/sshd
+
+# Start claude in a tmux session
+tmux new-session -d -s claude "claude --dangerously-skip-permissions"
+
+echo "============================================"
+echo " Claude is running in tmux session 'claude'"
+echo " SSH in and run: tmux attach -t claude"
+echo "============================================"
+
+# Keep container alive; if the tmux session dies, restart it
+while true; do
+    if ! tmux has-session -t claude 2>/dev/null; then
+        echo "Claude session ended. Restarting..."
+        tmux new-session -d -s claude "claude --dangerously-skip-permissions"
+    fi
+    sleep 5
+done
