@@ -27,6 +27,11 @@ USER claude
 
 RUN mkdir -p ~/.ssh && chmod 700 ~/.ssh
 
+# Configure tmux
+RUN echo 'set -g mouse on' >> ~/.tmux.conf && \
+    echo 'set -g history-limit 100000' >> ~/.tmux.conf && \
+    echo "set -g terminal-overrides 'xterm*:smcup@:rmcup@'" >> ~/.tmux.conf
+
 # Ensure SSH sessions get the right PATH and env, auto-attach to claude tmux
 RUN echo 'export PATH="/home/claude/.local/bin:/home/claude/.dotnet/tools:${PATH}"' >> ~/.bashrc && \
     echo 'export TERM=xterm-256color' >> ~/.bashrc && \

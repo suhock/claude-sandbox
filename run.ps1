@@ -30,7 +30,7 @@ $env:HOME = $env:USERPROFILE
 $env:CLAUDE_SSH_PORT = $SshPort
 
 # Per-instance state directory
-$env:CLAUDE_STATE_DIR = Join-Path $env:USERPROFILE ".claude-sandbox" $InstanceName
+$env:CLAUDE_STATE_DIR = Join-Path $env:USERPROFILE ".claude-sandbox"
 if (-not (Test-Path $env:CLAUDE_STATE_DIR)) {
     New-Item -ItemType Directory -Force -Path $env:CLAUDE_STATE_DIR | Out-Null
 }
