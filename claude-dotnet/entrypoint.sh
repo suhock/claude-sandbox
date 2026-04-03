@@ -33,19 +33,9 @@ fi
 # Start sshd (needs root, use sudo)
 sudo /usr/sbin/sshd
 
-# Start claude in a tmux session
-tmux new-session -d -s claude "claude --dangerously-skip-permissions"
-
+# Keep container alive
 echo "============================================"
-echo " Claude is running in tmux session 'claude'"
-echo " SSH in and run: tmux attach -t claude"
+echo " SSH in to manage tmux sessions"
 echo "============================================"
 
-# Keep container alive; if the tmux session dies, restart it
-while true; do
-    if ! tmux has-session -t claude 2>/dev/null; then
-        echo "Claude session ended. Restarting..."
-        tmux new-session -d -s claude "claude --dangerously-skip-permissions"
-    fi
-    sleep 5
-done
+exec sleep infinity

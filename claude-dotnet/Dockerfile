@@ -32,11 +32,11 @@ RUN echo 'set -g mouse on' >> ~/.tmux.conf && \
     echo 'set -g history-limit 100000' >> ~/.tmux.conf && \
     echo "set -g terminal-overrides 'xterm*:smcup@:rmcup@'" >> ~/.tmux.conf
 
-# Ensure SSH sessions get the right PATH and env, auto-attach to claude tmux
+# Ensure SSH sessions get the right PATH and env, launch tmux picker on SSH login
 RUN echo 'export PATH="/home/claude/.local/bin:/home/claude/.dotnet/tools:${PATH}"' >> ~/.bashrc && \
     echo 'export TERM=xterm-256color' >> ~/.bashrc && \
     echo 'cd /workspace' >> ~/.bashrc && \
-    echo 'if [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ]; then exec tmux attach -t claude; fi' >> ~/.bashrc
+    echo 'if [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ]; then exec /home/claude/tmux-picker.sh; fi' >> ~/.bashrc
 
 RUN dotnet tool install --global csharp-ls
 
@@ -47,6 +47,7 @@ ENV PATH="/home/claude/.local/bin:/home/claude/.dotnet/tools:${PATH}"
 
 RUN claude install
 
+COPY --chmod=755 --chown=claude:claude tmux-picker.sh /home/claude/tmux-picker.sh
 COPY --chmod=755 --chown=claude:claude entrypoint.sh /entrypoint.sh
 
 WORKDIR /workspace
