@@ -21,6 +21,10 @@ if [ -d /host-plugins ]; then
     done
 fi
 
+# Make container env vars available to SSH sessions
+echo "export SANDBOX_ENV=\"$SANDBOX_ENV\"" > /home/claude/.sandbox_env
+echo "export SANDBOX_WORKSPACE=\"$SANDBOX_WORKSPACE\"" >> /home/claude/.sandbox_env
+
 # Mark workspace as safe for git (bind mount has different ownership)
 git config --global --add safe.directory /workspace
 

@@ -17,7 +17,12 @@ services:
       start_period: 5s
 
   claude:
-    build: ./claude-dotnet
+    build:
+      context: ${SANDBOX_ROOT:-.}
+      dockerfile: shared/Dockerfile
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-debian:bookworm-slim}
+        ENV_NAME: ${ENV_NAME:-base}
     depends_on:
       proxy:
         condition: service_healthy
@@ -31,12 +36,15 @@ services:
       - HTTPS_PROXY=http://proxy:3128
       - HTTP_PROXY=http://proxy:3128
       - NO_PROXY=localhost,127.0.0.1
+      - SANDBOX_ENV=${SANDBOX_ENV:-unknown}
+      - SANDBOX_WORKSPACE=${SANDBOX_WORKSPACE:-workspace}
       - DISABLE_AUTOUPDATER=1
       - TERM=xterm-256color
     volumes:
       - ${DEV_DIR:-/dev/null}:/workspace
-      - ${HOME:-/dev/null}/.nuget/packages:/home/claude/.nuget/packages
       - ${CLAUDE_STATE_DIR:-/dev/null}:/home/claude/.claude
       - ${CLAUDE_STATE_DIR:-/dev/null}/.claude.json:/home/claude/.claude.json
       - ${HOST_PLUGINS_DIR:-/dev/null}:/host-plugins:ro
       - ${HOST_SSH_DIR:-/dev/null}:/host-ssh-keys:ro
+      - ${SANDBOX_ROOT:-.}/shared/tmux-picker.sh:/home/claude/tmux-picker.sh:ro
+      - ${SANDBOX_ROOT:-.}/shared/entrypoint.sh:/entrypoint.sh:ro

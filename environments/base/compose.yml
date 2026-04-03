@@ -1,0 +1,8 @@
+services:
+  claude:
+    build:
+      context: ${SANDBOX_ROOT}
+      dockerfile: shared/Dockerfile
+      args:
+        BASE_IMAGE: node:22-bookworm-slim
+        ENV_NAME: base

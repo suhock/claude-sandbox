@@ -1,0 +1,10 @@
+services:
+  claude:
+    build:
+      context: ${SANDBOX_ROOT}
+      dockerfile: shared/Dockerfile
+      args:
+        BASE_IMAGE: php:8.4-cli
+        ENV_NAME: php
+    volumes:
+      - ${HOME:-/dev/null}/.composer/cache:/home/claude/.composer/cache

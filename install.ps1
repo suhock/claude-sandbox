@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 
 $BinDir = Join-Path $env:USERPROFILE ".bin"
 $ScriptPath = Join-Path $PSScriptRoot "run.ps1"
+$Ps1File = Join-Path $BinDir "claude-sandbox.ps1"
 $CmdFile = Join-Path $BinDir "claude-sandbox.cmd"
 
 # Create .bin directory if needed
@@ -12,8 +13,12 @@ if (-not (Test-Path $BinDir)) {
     Write-Host "Created $BinDir"
 }
 
-# Write the wrapper script
-Set-Content -Path $CmdFile -Value "@echo off`npowershell -NoProfile -File `"$ScriptPath`" %*"
+# Write the PowerShell wrapper (handles named parameter forwarding)
+Set-Content -Path $Ps1File -Value "& '$ScriptPath' @args"
+Write-Host "Created $Ps1File"
+
+# Write the cmd wrapper (calls the ps1 wrapper)
+Set-Content -Path $CmdFile -Value "@echo off`npowershell -NoProfile -ExecutionPolicy Bypass -File `"$Ps1File`" %*"
 Write-Host "Created $CmdFile"
 
 # Add .bin to user PATH if not already present

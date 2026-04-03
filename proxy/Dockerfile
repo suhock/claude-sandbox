@@ -1,11 +1,11 @@
-FROM ubuntu:24.04
+FROM alpine:3.21
 
-RUN apt-get update && apt-get install -y squid dnsmasq dos2unix netcat-openbsd && apt-get clean
+RUN apk add --no-cache squid dnsmasq
 
 COPY squid.conf /etc/squid/squid.conf
 COPY dnsmasq.conf /etc/dnsmasq.conf
 COPY start.sh /start.sh
-RUN dos2unix /start.sh && chmod +x /start.sh
+RUN chmod +x /start.sh
 
 EXPOSE 3128 53/udp
 
