@@ -9,12 +9,15 @@ MAX_SESSIONS=10
 # Start tmux server (reads ~/.tmux.conf written at build time)
 tmux start-server 2>/dev/null
 
-# Colors
+# Color palette
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
 C_DIM='\033[2m'
 C_PRIMARY='\033[38;5;229m'   # Pale sandy yellow
 C_SECONDARY='\033[38;5;246m' # Neutral gray
+
+# echo with clear-to-end-of-line (flicker-free overwrite)
+echo_line() { echo -e "$@\033[K"; }
 
 # Session colors as 256-color indices (cycled per session)
 # Used for both tmux status bars (colour<N>) and ANSI menu text (\033[38;5;<N>m)
@@ -37,12 +40,10 @@ show_menu() {
     # Move cursor home, hide it during redraw
     printf '\033[?25l\033[H'
 
-    local EL='\033[K'  # clear to end of line
-
     # Print the banner
-    echo -e "${C_PRIMARY}  ▖  ▟▙  ▗  ${C_RESET}  ${EL}"
-    echo -e "${C_PRIMARY} ▟▜▖▟▛▜▙▗▛▙ ${C_RESET}  ${C_BOLD}Claude Sandbox${C_RESET}${EL}"
-    echo -e "${C_PRIMARY} █▀██▀▀██▀█ ${C_RESET}  ${C_SECONDARY}${SANDBOX_ENV:-unknown} · ${workspace}${C_RESET}${EL}"
+    echo_line "${C_PRIMARY}  ▖  ▟▙  ▗  ${C_RESET}  "
+    echo_line "${C_PRIMARY} ▟▜▖▟▛▜▙▗▛▙ ${C_RESET}  ${C_BOLD}Claude Sandbox${C_RESET}"
+    echo_line "${C_PRIMARY} █▀██▀▀██▀█ ${C_RESET}  ${C_SECONDARY}${SANDBOX_ENV:-unknown} · ${workspace}${C_RESET}"
     printf "${C_SECONDARY}…${C_PRIMARY}████  ████${C_SECONDARY}";
     printf '…%.0s' $(seq 1 $(( $(tput cols) - 11 )));
     printf "${C_RESET}\n"
@@ -72,32 +73,32 @@ show_menu() {
 
     # Show the list of active sessions
     if [ ${#session_names[@]} -eq 0 ]; then
-        echo -e "  ${C_SECONDARY}No running sessions${C_RESET}${EL}"
+        echo_line "  ${C_SECONDARY}No running sessions${C_RESET}"
     else
-        echo -e "  ${C_SECONDARY}Active sessions${C_RESET}${EL}"
+        echo_line "  ${C_SECONDARY}Active sessions${C_RESET}"
         for i in "${!session_names[@]}"; do
             if [ $i -lt $MAX_SESSIONS ]; then
                 local key=$(( (i + 1) % 10 ))
                 local cindex=${SESSION_COLORS[$(( i % ${#SESSION_COLORS[@]} ))]}
                 local c_session="\033[38;5;${cindex}m"
-                echo -e "  ${C_PRIMARY}${key}${C_RESET}  ${c_session}${session_names[$i]}${C_RESET} ${C_SECONDARY}${session_ages[$i]}${C_RESET}${EL}"
+                echo_line "  ${C_PRIMARY}${key}${C_RESET}  ${c_session}${session_names[$i]}${C_RESET} ${C_SECONDARY}${session_ages[$i]}${C_RESET}"
             fi
         done
     fi
 
-    echo -e "${EL}"
+    echo_line ""
 
     # Show options for new sessions
     if [ ${#session_names[@]} -lt $MAX_SESSIONS ]; then
-        echo -e "  ${C_PRIMARY}N${C_RESET}  New Claude Code session${EL}"
-        echo -e "  ${C_PRIMARY}S${C_RESET}  New shell session${EL}"
+        echo_line "  ${C_PRIMARY}N${C_RESET}  New Claude Code session"
+        echo_line "  ${C_PRIMARY}S${C_RESET}  New shell session"
     fi
 
-    echo -e "${EL}"
+    echo_line ""
 
     # Show quit option
-    echo -e "  ${C_PRIMARY}Q${C_RESET}  Quit${EL}"
-    echo -e "${EL}"
+    echo_line "  ${C_PRIMARY}Q${C_RESET}  Quit"
+    echo_line ""
 
     # Show prompt, clear remaining lines, show cursor
     printf "  ${C_SECONDARY}>${C_RESET} \033[J\033[?25h"
@@ -106,6 +107,30 @@ show_menu() {
 get_session_name() {
     local idx=$1
     tmux list-sessions -F '#{session_name}' 2>/dev/null | sed -n "$((idx+1))p"
+}
+
+create_session() {
+    local name=$1
+    local cmd=$2
+
+    # Find next available session number
+    local n=1
+    while tmux has-session -t "${name}-$n" 2>/dev/null; do
+        n=$((n + 1))
+    done
+
+    # Assign a distinct status bar color based on session number
+    local color_idx=$(( (n - 1) % ${#SESSION_COLORS[@]} ))
+    local scolor="colour${SESSION_COLORS[$color_idx]}"
+    local status_left=" ${SANDBOX_WORKSPACE:-workspace} · ${SANDBOX_ENV:-unknown} "
+    local status_right=" #I:#W* · #S "
+
+    tmux new-session -s "${name}-$n" $cmd \; \
+        set-option mouse on \; \
+        set-option status-style "bg=$scolor,fg=black" \; \
+        set-option status-left-length 80 \; \
+        set-option status-left "$status_left" \; \
+        set-option status-right "$status_right"
 }
 
 clear
@@ -137,30 +162,10 @@ while true; do
         if [ "$count" -ge $MAX_SESSIONS ]; then
             continue
         fi
-        n=1
-        while tmux has-session -t "claude-$n" 2>/dev/null; do
-            n=$((n + 1))
-        done
-        # Assign a distinct status bar color based on session number
-        color_idx=$(( (n - 1) % ${#SESSION_COLORS[@]} ))
-        scolor="colour${SESSION_COLORS[$color_idx]}"
-        status_left=" ${SANDBOX_WORKSPACE:-workspace} · ${SANDBOX_ENV:-unknown} "
-        status_right=" #I:#W* · #S "
-
         if [ "$choice" = "N" ]; then
-            tmux new-session -s "claude-$n" "claude --dangerously-skip-permissions" \; \
-                set-option mouse on \; \
-                set-option status-style "bg=$scolor,fg=black" \; \
-                set-option status-left-length 80 \; \
-                set-option status-left "$status_left" \; \
-                set-option status-right "$status_right"
+            create_session "claude" "claude --dangerously-skip-permissions"
         else
-            tmux new-session -s "claude-$n" \; \
-                set-option mouse on \; \
-                set-option status-style "bg=$scolor,fg=black" \; \
-                set-option status-left-length 80 \; \
-                set-option status-left "$status_left" \; \
-                set-option status-right "$status_right"
+            create_session "shell" ""
         fi
         REDRAW=1
         continue
