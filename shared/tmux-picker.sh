@@ -33,13 +33,16 @@ SESSION_COLORS=(
 
 show_menu() {
     local workspace="${SANDBOX_WORKSPACE:-workspace}"
- 
-    clear
+
+    # Move cursor home, hide it during redraw
+    printf '\033[?25l\033[H'
+
+    local EL='\033[K'  # clear to end of line
 
     # Print the banner
-    echo -e "${C_PRIMARY}  ▖  ▟▙  ▗  ${C_RESET}  "
-    echo -e "${C_PRIMARY} ▟▜▖▟▛▜▙▗▛▙ ${C_RESET}  ${C_BOLD}Claude Sandbox${C_RESET}"
-    echo -e "${C_PRIMARY} █▀██▀▀██▀█ ${C_RESET}  ${C_SECONDARY}${SANDBOX_ENV:-unknown} · ${workspace}${C_RESET}"
+    echo -e "${C_PRIMARY}  ▖  ▟▙  ▗  ${C_RESET}  ${EL}"
+    echo -e "${C_PRIMARY} ▟▜▖▟▛▜▙▗▛▙ ${C_RESET}  ${C_BOLD}Claude Sandbox${C_RESET}${EL}"
+    echo -e "${C_PRIMARY} █▀██▀▀██▀█ ${C_RESET}  ${C_SECONDARY}${SANDBOX_ENV:-unknown} · ${workspace}${C_RESET}${EL}"
     printf "${C_SECONDARY}…${C_PRIMARY}████  ████${C_SECONDARY}";
     printf '…%.0s' $(seq 1 $(( $(tput cols) - 11 )));
     printf "${C_RESET}\n"
@@ -69,35 +72,35 @@ show_menu() {
 
     # Show the list of active sessions
     if [ ${#session_names[@]} -eq 0 ]; then
-        echo -e "  ${C_SECONDARY}No running sessions${C_RESET}"
+        echo -e "  ${C_SECONDARY}No running sessions${C_RESET}${EL}"
     else
-        echo -e "  ${C_SECONDARY}Active sessions${C_RESET}"
+        echo -e "  ${C_SECONDARY}Active sessions${C_RESET}${EL}"
         for i in "${!session_names[@]}"; do
             if [ $i -lt $MAX_SESSIONS ]; then
                 local key=$(( (i + 1) % 10 ))
                 local cindex=${SESSION_COLORS[$(( i % ${#SESSION_COLORS[@]} ))]}
                 local c_session="\033[38;5;${cindex}m"
-                echo -e "  ${C_PRIMARY}${key}${C_RESET}  ${c_session}${session_names[$i]}${C_RESET} ${C_SECONDARY}${session_ages[$i]}${C_RESET}"
+                echo -e "  ${C_PRIMARY}${key}${C_RESET}  ${c_session}${session_names[$i]}${C_RESET} ${C_SECONDARY}${session_ages[$i]}${C_RESET}${EL}"
             fi
         done
     fi
 
-    echo ""
+    echo -e "${EL}"
 
     # Show options for new sessions
     if [ ${#session_names[@]} -lt $MAX_SESSIONS ]; then
-        echo -e "  ${C_PRIMARY}N${C_RESET}  New Claude Code session"
-        echo -e "  ${C_PRIMARY}S${C_RESET}  New shell session"
+        echo -e "  ${C_PRIMARY}N${C_RESET}  New Claude Code session${EL}"
+        echo -e "  ${C_PRIMARY}S${C_RESET}  New shell session${EL}"
     fi
 
-    echo ""
+    echo -e "${EL}"
 
     # Show quit option
-    echo -e "  ${C_PRIMARY}Q${C_RESET}  Quit"
-    echo ""
+    echo -e "  ${C_PRIMARY}Q${C_RESET}  Quit${EL}"
+    echo -e "${EL}"
 
-    # Show prompt
-    printf "  ${C_SECONDARY}>${C_RESET} "
+    # Show prompt, clear remaining lines, show cursor
+    printf "  ${C_SECONDARY}>${C_RESET} \033[J\033[?25h"
 }
 
 get_session_name() {
@@ -105,13 +108,18 @@ get_session_name() {
     tmux list-sessions -F '#{session_name}' 2>/dev/null | sed -n "$((idx+1))p"
 }
 
+clear
 REDRAW=1
+LAST_DRAW=0
+REFRESH_INTERVAL=1
 trap 'REDRAW=1' WINCH
 
 while true; do
-    if [ $REDRAW -eq 1 ]; then
+    now=$(date +%s)
+    if [ $REDRAW -eq 1 ] || [ $(( now - LAST_DRAW )) -ge $REFRESH_INTERVAL ]; then
         show_menu
         REDRAW=0
+        LAST_DRAW=$now
     fi
     read -rsn1 -t 0.25 choice || { continue; }
     [ -z "$choice" ] && continue
