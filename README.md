@@ -63,6 +63,7 @@ Two containers are orchestrated via Docker Compose:
 ```powershell
 claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild] [-Connect]
 claude-sandbox -Environment <name> -Restart
+claude-sandbox -Environment <name> -AddFirewallRule
 claude-sandbox -CopySshKeys
 ```
 
@@ -74,6 +75,7 @@ claude-sandbox -CopySshKeys
 | `-Rebuild`      | Force rebuild of the container image                   |
 | `-Restart`      | Stop and restart the container (picks up new mounts)   |
 | `-Connect`      | SSH into the container after starting                  |
+| `-AddFirewallRule` | Open the SSH port in Windows Firewall (requires Administrator) |
 | `-CopySshKeys`  | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
 
 Examples:
@@ -93,6 +95,9 @@ claude-sandbox -Environment base -Restart
 
 # Launch and immediately connect
 claude-sandbox -Environment base -Connect
+
+# Open Windows Firewall for remote access (requires Administrator)
+claude-sandbox -Environment dotnet -AddFirewallRule
 
 # Import SSH keys from ~/.ssh (works without -Environment)
 claude-sandbox -CopySshKeys
@@ -177,7 +182,14 @@ Host sandbox
 
 Then connect with `ssh sandbox`. SSH clients like [Termius](https://termius.com/) (Android, iOS, desktop) support this kind of chained connection natively.
 
-**Port exposure** -- Alternatively, bind the SSH port to your dev machine's network interface so other devices can connect directly. Change the port mapping in `docker-compose.yml` from `"${CLAUDE_SSH_PORT:-2222}:22"` to `"0.0.0.0:${CLAUDE_SSH_PORT:-2222}:22"`, or configure your firewall to forward the port. Then connect with `ssh -p <port> claude@<dev-machine-ip>`.
+**Port exposure** -- Alternatively, bind the SSH port to your dev machine's network interface so other devices can connect directly. Change the port mapping in `docker-compose.yml` from `"${CLAUDE_SSH_PORT:-2222}:22"` to `"0.0.0.0:${CLAUDE_SSH_PORT:-2222}:22"`. You'll also need to open the port in Windows Firewall:
+
+```powershell
+# Requires an elevated (Administrator) PowerShell prompt
+claude-sandbox -Environment dotnet -AddFirewallRule
+```
+
+Then connect with `ssh -p <port> claude@<dev-machine-ip>`.
 
 ### Working with tmux sessions
 

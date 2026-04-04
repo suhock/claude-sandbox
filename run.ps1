@@ -6,7 +6,8 @@ param(
     [switch]$Rebuild,
     [switch]$Restart,
     [switch]$CopySshKeys,
-    [switch]$Connect
+    [switch]$Connect,
+    [switch]$AddFirewallRule
 )
 
 Set-StrictMode -Version Latest
@@ -85,6 +86,7 @@ if (-not $Environment) {
         Write-Host "Usage:"
         Write-Host "  claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild] [-Connect]"
         Write-Host "  claude-sandbox -Environment <name> -Restart"
+        Write-Host "  claude-sandbox -Environment <name> -AddFirewallRule"
         Write-Host "  claude-sandbox -CopySshKeys"
         Write-Host ""
         Write-Host "Environments: $($ValidEnvironments -join ', ')"
@@ -97,6 +99,7 @@ if (-not $Environment) {
         Write-Host "  -Restart      Stop and restart the container (picks up new mounts)"
         Write-Host "  -CopySshKeys  Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
         Write-Host "  -Connect      SSH into the container after starting"
+        Write-Host "  -AddFirewallRule  Open the SSH port in Windows Firewall (requires Administrator)"
         Write-Host ""
         exit 0
     }
@@ -124,6 +127,31 @@ $InstanceName = "claude-$DirName-$Environment-$InstanceHash"
 # Auto-assign a stable port from the hash if not specified
 if ($SshPort -eq 0) {
     $SshPort = 2200 + [Convert]::ToInt32($InstanceHash.Substring(0, 4), 16) % 800
+}
+
+# Handle -AddFirewallRule as a standalone command
+if ($AddFirewallRule) {
+    $RuleName = "Claude Sandbox - $InstanceName"
+    $existing = netsh advfirewall firewall show rule name="$RuleName" 2>$null
+    if ($existing -match "Rule Name") {
+        Write-Host "Firewall rule already exists: $RuleName (port $SshPort)"
+    } else {
+        # Self-elevate if not running as Administrator
+        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        if (-not $isAdmin) {
+            $proc = Start-Process powershell -Verb RunAs -Wait -PassThru -ArgumentList "-NoProfile -Command `"netsh advfirewall firewall add rule name='$RuleName' dir=in action=allow protocol=TCP localport=$SshPort`""
+            if ($proc.ExitCode -ne 0) {
+                Write-Host ""
+                Write-Host "ERROR: Failed to add firewall rule." -ForegroundColor Red
+                Write-Host ""
+                exit 1
+            }
+        } else {
+            netsh advfirewall firewall add rule name="$RuleName" dir=in action=allow protocol=TCP localport=$SshPort
+        }
+        Write-Host "Added firewall rule: $RuleName (TCP port $SshPort)"
+    }
+    exit 0
 }
 
 $env:COMPOSE_PROJECT_NAME = $InstanceName

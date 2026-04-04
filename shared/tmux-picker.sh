@@ -1,20 +1,12 @@
 #!/bin/bash
 # Interactive tmux session picker for SSH logins
 
+# Claude code and this picker both use UTF-8 characters
 export LANG=C.utf8
 
 MAX_SESSIONS=10
 
-# Write tmux config file (loaded before any session starts)
-cat > ~/.tmux.conf << 'TMUX_CONF'
-set -s escape-time 200
-set -g mouse on
-set -g history-limit 100000
-set -g terminal-overrides 'xterm*:smcup@:rmcup@'
-set -g detach-on-destroy on
-set -g window-status-format ''
-set -g window-status-current-format ''
-TMUX_CONF
+# Start tmux server (reads ~/.tmux.conf written at build time)
 tmux start-server 2>/dev/null
 
 # Colors
@@ -42,6 +34,8 @@ show_menu() {
     local workspace="${SANDBOX_WORKSPACE:-workspace}"
  
     clear
+
+    # Print the banner
     echo ""
     echo -e "${C_PRIMARY}  ▖  ▟▙  ▗  ${C_RESET}  ${C_BOLD}Claude Sandbox${C_RESET}"
     echo -e "${C_PRIMARY} ▟▜▖▟▛▜▙▗▛▙ ${C_RESET}  ${C_SECONDARY}${SANDBOX_ENV:-unknown}${C_RESET}"
@@ -51,24 +45,31 @@ show_menu() {
     printf "${C_RESET}\n"
     echo ""
 
+    # Obtain the list of active sessions
     sessions=()
+
     while IFS= read -r line; do
         sessions+=("$line")
-    done < <(tmux list-sessions -F '#{session_name} #{session_activity}' 2>/dev/null | while read -r name ts; do
-        now=$(date +%s)
-        diff=$(( now - ts ))
-        if [ $diff -lt 60 ]; then
-            ago="less than a minute ago"
-        elif [ $diff -lt 3600 ]; then
-            ago="$(( diff / 60 ))m ago"
-        elif [ $diff -lt 86400 ]; then
-            ago="$(( diff / 3600 ))h ago"
-        else
-            ago="$(( diff / 86400 ))d ago"
-        fi
-        echo "$name ($ago)"
-    done)
+    done < <(
+        tmux list-sessions -F '#{session_name} #{session_activity}' 2>/dev/null | while read -r name ts; do
+            now=$(date +%s)
+            diff=$(( now - ts ))
 
+            if [ $diff -lt 60 ]; then
+                ago="less than a minute ago"
+            elif [ $diff -lt 3600 ]; then
+                ago="$(( diff / 60 ))m ago"
+            elif [ $diff -lt 86400 ]; then
+                ago="$(( diff / 3600 ))h ago"
+            else
+                ago="$(( diff / 86400 ))d ago"
+            fi
+
+            echo "$name ($ago)"
+        done
+    )
+
+    # Show the list of active sessions
     if [ ${#sessions[@]} -eq 0 ]; then
         echo -e "  ${C_SECONDARY}No running sessions${C_RESET}"
     else
@@ -82,14 +83,20 @@ show_menu() {
     fi
 
     echo ""
+
+    # Show options for new sessions
     if [ ${#sessions[@]} -lt $MAX_SESSIONS ]; then
         echo -e "  ${C_PRIMARY}N${C_RESET}  New Claude Code session"
         echo -e "  ${C_PRIMARY}S${C_RESET}  New shell session"
     fi
 
     echo ""
+
+    # Show quit option
     echo -e "  ${C_PRIMARY}Q${C_RESET}  Quit"
     echo ""
+
+    # Show prompt
     printf "  ${C_SECONDARY}>${C_RESET} "
 }
 

@@ -22,7 +22,8 @@ param(
     [switch]`$Rebuild,
     [switch]`$Restart,
     [switch]`$CopySshKeys,
-    [switch]`$Connect
+    [switch]`$Connect,
+    [switch]`$AddFirewallRule
 )
 & '$ScriptPath' @PSBoundParameters
 "@

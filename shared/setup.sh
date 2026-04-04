@@ -66,6 +66,17 @@ SCRIPT
     curl -fsSL https://claude.ai/install.sh | bash
     export PATH="/home/claude/.local/bin:${PATH}"
     claude install
+
+    # --- tmux (after claude install, which may write its own .tmux.conf) ---
+    cat > ~/.tmux.conf << 'TMUX_CONF'
+set -s escape-time 200
+set -g mouse on
+set -g history-limit 100000
+set -g terminal-overrides 'xterm*:smcup@:rmcup@'
+set -g detach-on-destroy on
+set -g window-status-format ''
+set -g window-status-current-format ''
+TMUX_CONF
     ;;
 
 *)
