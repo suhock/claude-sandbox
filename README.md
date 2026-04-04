@@ -2,7 +2,7 @@
 
 A Docker-based development environment that provides isolated, SSH-accessible workspaces for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Each sandbox runs in its own container with a restrictive network proxy that only allows traffic to Anthropic services, keeping your development environment secure by default.
 
-> **WARNING: Sandboxes are not secured for network exposure.** SSH is configured with empty passwords and passwordless authentication. These instances must never be directly exposed to a network or the public internet. The intended access pattern is to VPN into the network where your development machine resides, SSH into the development machine, and then SSH into the sandbox instance from there (a jump host / ProxyJump configuration). SSH clients like [Termius](https://termius.com/) (Android, iOS, desktop) support this kind of chained connection natively.
+> **NOTE:** These instances should not be directly exposed to the public internet. See [Remote Access](#remote-access) for connecting from other devices.
 
 ## Architecture
 
@@ -35,6 +35,7 @@ Two containers are orchestrated via Docker Compose:
 - **Windows 10/11** with PowerShell 5.0+
 - **Docker Desktop** installed and running
 - **SSH client** (built-in on modern Windows)
+- **SSH key pair** for authentication (see [SSH Authentication](#ssh-authentication))
 
 ## Installation
 
@@ -60,27 +61,37 @@ Two containers are orchestrated via Docker Compose:
 ### Launching a sandbox
 
 ```powershell
-claude-sandbox -Environment <base|php|dotnet> [-DevDir <path>] [-SshPort <port>] [-Rebuild]
+claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild]
+claude-sandbox -Environment <name> -Restart
+claude-sandbox -CopySshKeys
 ```
 
-| Parameter      | Required | Default             | Description                                    |
-|----------------|----------|---------------------|------------------------------------------------|
-| `-Environment` | Yes      | --                  | Environment type: `dotnet`, `php`, or `base`   |
-| `-DevDir`      | No       | Current directory   | Host directory to mount as `/workspace`         |
-| `-SshPort`     | No       | Auto-assigned       | SSH port on the host (range 2200-2999)          |
-| `-Rebuild`     | No       | `false`             | Force rebuild of the container image            |
+| Parameter       | Description                                           |
+|-----------------|-------------------------------------------------------|
+| `-Environment`  | Environment type: `dotnet`, `php`, or `base`          |
+| `-DevDir`       | Workspace directory (default: current directory)       |
+| `-SshPort`      | SSH port on the host (default: auto-assigned, range 2200-2999) |
+| `-Rebuild`      | Force rebuild of the container image                   |
+| `-Restart`      | Stop and restart the container (picks up new mounts)   |
+| `-CopySshKeys`  | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
 
 Examples:
 
 ```powershell
-# Rebuild a .NET sandbox with a custom SSH port
-claude-sandbox -Environment dotnet -DevDir . -SshPort 2345 -Rebuild
+# Launch a Node.js sandbox for the current directory
+claude-sandbox -Environment base
 
 # Launch a PHP sandbox for a specific project
 claude-sandbox -Environment php -DevDir D:\projects\my-php-app
 
-# Launch a Node.js sandbox for the current directory
-claude-sandbox -Environment base
+# Rebuild a .NET sandbox with a custom SSH port
+claude-sandbox -Environment dotnet -DevDir . -SshPort 2345 -Rebuild
+
+# Restart a running sandbox
+claude-sandbox -Environment base -Restart
+
+# Import SSH keys from ~/.ssh (works without -Environment)
+claude-sandbox -CopySshKeys
 ```
 
 You can also run directly from the repository root without installing:
@@ -88,6 +99,35 @@ You can also run directly from the repository root without installing:
 ```powershell
 .\run.ps1 -Environment base -DevDir D:\projects\myapp
 ```
+
+### SSH authentication
+
+Password authentication is disabled. All sandbox containers share a single authorized keys file at `~\.claude-sandbox\authorized_keys`. Add one public key per line. Changes take effect immediately on the next SSH connection -- no container restart required.
+
+**Option 1: Manual setup**
+
+Create the file and add your public key(s):
+
+```powershell
+mkdir ~\.claude-sandbox -Force
+copy ~/.ssh/id_ed25519.pub ~/.claude-sandbox/authorized_keys
+```
+
+If you don't have an SSH key pair, generate one first:
+
+```powershell
+ssh-keygen -t ed25519
+```
+
+**Option 2: Import from `~/.ssh`**
+
+The `-CopySshKeys` flag collects all public keys (`~/.ssh/*.pub`) and authorized keys (`~/.ssh/authorized_keys`) from your host into `~\.claude-sandbox\authorized_keys`:
+
+```powershell
+claude-sandbox -Environment base -CopySshKeys
+```
+
+This can be run at any time, including against already-running sandboxes, to refresh the keys.
 
 ### Connecting via SSH
 
@@ -97,7 +137,31 @@ Once the sandbox is running, the script outputs the SSH command:
 ssh -p <port> claude@localhost
 ```
 
-No password is required -- your host SSH keys (`~/.ssh/authorized_keys`) are automatically imported into the container.
+### Remote access
+
+Sandboxes listen on `localhost` only. To connect from another device (phone, tablet, laptop), there are two approaches:
+
+**SSH jump host (recommended)** -- Keep the sandbox on `localhost` and chain through your dev machine using `ProxyJump`. This requires the OpenSSH server to be running on your Windows machine. To enable it (from an elevated PowerShell prompt):
+
+```powershell
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+Start-Service sshd
+Set-Service sshd -StartupType Automatic
+```
+
+On the connecting device, add to `~/.ssh/config`:
+
+```
+Host sandbox
+    HostName localhost
+    Port <sandbox-port>
+    User claude
+    ProxyJump <user>@<dev-machine-ip>
+```
+
+Then connect with `ssh sandbox`. SSH clients like [Termius](https://termius.com/) (Android, iOS, desktop) support this kind of chained connection natively.
+
+**Port exposure** -- Alternatively, bind the SSH port to your dev machine's network interface so other devices can connect directly. Change the port mapping in `docker-compose.yml` from `"${CLAUDE_SSH_PORT:-2222}:22"` to `"0.0.0.0:${CLAUDE_SSH_PORT:-2222}:22"`, or configure your firewall to forward the port. Then connect with `ssh -p <port> claude@<dev-machine-ip>`.
 
 ### Working with tmux sessions
 
@@ -259,6 +323,14 @@ The sandbox waits for sshd to be ready before returning, but if it times out:
 1. Verify the container is running: `docker ps`
 2. Check that the correct port is being used (shown in the launch output)
 3. Remove stale host keys: `ssh-keygen -R "[localhost]:<port>"`
+
+### SSH "permission denied"
+
+Verify that `~\.claude-sandbox\authorized_keys` exists and contains your public key. You can re-import keys from `~/.ssh` at any time:
+
+```powershell
+claude-sandbox -Environment base -CopySshKeys
+```
 
 ### Proxy blocking required traffic
 

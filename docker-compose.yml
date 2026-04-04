@@ -45,6 +45,6 @@ services:
       - ${CLAUDE_STATE_DIR:-/dev/null}:/home/claude/.claude
       - ${CLAUDE_STATE_DIR:-/dev/null}/.claude.json:/home/claude/.claude.json
       - ${HOST_PLUGINS_DIR:-/dev/null}:/host-plugins:ro
-      - ${HOST_SSH_DIR:-/dev/null}:/host-ssh-keys:ro
+      - ${SANDBOX_AUTHORIZED_KEYS}:/host-ssh-keys/authorized_keys:ro
       - ${SANDBOX_ROOT:-.}/shared/tmux-picker.sh:/home/claude/tmux-picker.sh:ro
       - ${SANDBOX_ROOT:-.}/shared/entrypoint.sh:/entrypoint.sh:ro

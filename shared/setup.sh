@@ -22,13 +22,22 @@ case "${1:-}" in
 
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-    # --- sshd ---
+    # --- sshd (key-only authentication) ---
     mkdir -p /run/sshd
-    sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
-    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-    echo "AuthorizedKeysFile .ssh/authorized_keys" >> /etc/ssh/sshd_config
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords no/' /etc/ssh/sshd_config
+    echo "AuthorizedKeysFile none" >> /etc/ssh/sshd_config
+    echo "AuthorizedKeysCommand /etc/ssh/authorized_keys_command.sh %u" >> /etc/ssh/sshd_config
+    echo "AuthorizedKeysCommandUser root" >> /etc/ssh/sshd_config
     echo "claude ALL=(root) NOPASSWD: /usr/sbin/sshd" >> /etc/sudoers.d/claude-sshd
     chmod 440 /etc/sudoers.d/claude-sshd
+
+    # --- AuthorizedKeysCommand script (reads fresh from host mount on every login) ---
+    cat > /etc/ssh/authorized_keys_command.sh << 'SCRIPT'
+#!/bin/bash
+cat /host-ssh-keys/authorized_keys 2>/dev/null
+SCRIPT
+    chmod 755 /etc/ssh/authorized_keys_command.sh
 
     # --- User creation (handles UID 1000 conflicts) ---
     existing_user=$(getent passwd 1000 | cut -d: -f1 || true)
@@ -38,7 +47,7 @@ case "${1:-}" in
     elif [ -z "$existing_user" ]; then
         useradd -m -u 1000 -s /bin/bash claude
     fi
-    passwd -d claude
+    passwd -l claude
     ;;
 
 --user)

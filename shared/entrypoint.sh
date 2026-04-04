@@ -28,12 +28,6 @@ echo "export SANDBOX_WORKSPACE=\"$SANDBOX_WORKSPACE\"" >> /home/claude/.sandbox_
 # Mark workspace as safe for git (bind mount has different ownership)
 git config --global --add safe.directory /workspace
 
-# Import authorized keys from mounted host keys
-if [ -d /host-ssh-keys ]; then
-    cat /host-ssh-keys/*.pub >> ~/.ssh/authorized_keys 2>/dev/null
-    chmod 600 ~/.ssh/authorized_keys 2>/dev/null
-fi
-
 # Start sshd (needs root, use sudo)
 sudo /usr/sbin/sshd
 

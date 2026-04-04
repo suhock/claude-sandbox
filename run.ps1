@@ -3,7 +3,9 @@ param(
     [string]$DevDir = (Get-Location).Path,
     [int]$SshPort = 0,
     [string]$Environment,
-    [switch]$Rebuild
+    [switch]$Rebuild,
+    [switch]$Restart,
+    [switch]$CopySshKeys
 )
 
 Set-StrictMode -Version Latest
@@ -11,17 +13,59 @@ $ErrorActionPreference = "Stop"
 
 $ValidEnvironments = Get-ChildItem -Directory (Join-Path $PSScriptRoot "environments") | ForEach-Object { $_.Name }
 
+# Handle -CopySshKeys as a standalone command
+if ($CopySshKeys -and -not $Environment) {
+    $SandboxDir = Join-Path $env:USERPROFILE ".claude-sandbox"
+    if (-not (Test-Path $SandboxDir)) {
+        New-Item -ItemType Directory -Force -Path $SandboxDir | Out-Null
+    }
+    $AuthKeysOut = Join-Path $SandboxDir "authorized_keys"
+    # Docker creates a directory when mounting a file that doesn't exist yet — clean it up
+    if (Test-Path $AuthKeysOut -PathType Container) {
+        Remove-Item $AuthKeysOut -Recurse -Force
+    }
+    $HostSshDir = Join-Path $env:USERPROFILE ".ssh"
+    $keys = @()
+    foreach ($pub in (Get-ChildItem -Path $HostSshDir -Filter "*.pub" -ErrorAction SilentlyContinue)) {
+        $keys += Get-Content $pub.FullName
+    }
+    $AuthKeysFile = Join-Path $HostSshDir "authorized_keys"
+    if (Test-Path $AuthKeysFile) {
+        $keys += Get-Content $AuthKeysFile
+    }
+    if ($keys.Count -eq 0) {
+        Write-Error "No public keys found in $HostSshDir"
+        exit 1
+    }
+    $keys | Sort-Object -Unique | Set-Content -Path $AuthKeysOut
+    Write-Host ""
+    Write-Host "Wrote $($keys.Count) key(s) to $AuthKeysOut"
+    Write-Host ""
+    if (-not (Test-Path (Join-Path $HostSshDir "*.pub"))) {
+        Write-Host "WARNING: No SSH key pair found on this machine." -ForegroundColor Yellow
+        Write-Host "  You will not be able to connect from this machine without one." -ForegroundColor Yellow
+        Write-Host "  Generate a key pair with: ssh-keygen -t ed25519" -ForegroundColor Yellow
+        Write-Host ""
+    }
+    exit 0
+}
+
 if (-not $Environment) {
     Write-Host ""
-    Write-Host "Usage: claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild]"
+    Write-Host "Usage:"
+    Write-Host "  claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild]"
+    Write-Host "  claude-sandbox -Environment <name> -Restart"
+    Write-Host "  claude-sandbox -CopySshKeys"
     Write-Host ""
     Write-Host "Environments: $($ValidEnvironments -join ', ')"
     Write-Host ""
     Write-Host "Options:"
-    Write-Host "  -Environment  Runtime environment (required)"
+    Write-Host "  -Environment  Runtime environment"
     Write-Host "  -DevDir       Workspace directory (default: current directory)"
     Write-Host "  -SshPort      SSH port (default: auto-assigned)"
     Write-Host "  -Rebuild      Force rebuild without cache"
+    Write-Host "  -Restart      Stop and restart the container (picks up new mounts)"
+    Write-Host "  -CopySshKeys  Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
     Write-Host ""
     exit 0
 }
@@ -67,8 +111,34 @@ if (-not (Test-Path $env:CLAUDE_STATE_DIR)) {
 # Host plugins directory (read-only mount)
 $env:HOST_PLUGINS_DIR = Join-Path (Join-Path $env:USERPROFILE ".claude") "plugins"
 
-# Host SSH keys directory (for authorized_keys)
-$env:HOST_SSH_DIR = Join-Path $env:USERPROFILE ".ssh"
+# SSH authorized keys file — shared across all instances, user-managed
+# Always ensure the file exists so Docker mounts a file, not /dev/null
+$env:SANDBOX_AUTHORIZED_KEYS = Join-Path (Join-Path $env:USERPROFILE ".claude-sandbox") "authorized_keys"
+# Docker creates a directory when mounting a file that doesn't exist yet — clean it up
+if (Test-Path $env:SANDBOX_AUTHORIZED_KEYS -PathType Container) {
+    Remove-Item $env:SANDBOX_AUTHORIZED_KEYS -Recurse -Force
+}
+if (-not (Test-Path $env:SANDBOX_AUTHORIZED_KEYS)) {
+    New-Item -ItemType File -Force -Path $env:SANDBOX_AUTHORIZED_KEYS | Out-Null
+}
+$HasAuthorizedKeys = (Get-Item $env:SANDBOX_AUTHORIZED_KEYS).Length -gt 0
+
+function Show-SshWarnings {
+    if (-not $HasAuthorizedKeys) {
+        Write-Host "WARNING: No SSH keys configured. You will not be able to connect." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Add public keys to: $($env:SANDBOX_AUTHORIZED_KEYS)" -ForegroundColor Yellow
+        Write-Host "  Or re-run with -CopySshKeys to import from ~/.ssh" -ForegroundColor Yellow
+        Write-Host ""
+    }
+    $HostSshDir = Join-Path $env:USERPROFILE ".ssh"
+    if (-not (Test-Path (Join-Path $HostSshDir "*.pub"))) {
+        Write-Host "WARNING: No SSH key pair found on this machine." -ForegroundColor Yellow
+        Write-Host "  You will not be able to connect from this machine without one." -ForegroundColor Yellow
+        Write-Host "  Generate a key pair with: ssh-keygen -t ed25519" -ForegroundColor Yellow
+        Write-Host ""
+    }
+}
 
 # Check if already running
 $running = docker compose @ComposeArgs ps --status running --format "{{.Name}}" 2>$null
@@ -76,12 +146,16 @@ if ($running -match $Environment) {
     if ($Rebuild) {
         Write-Host "[$InstanceName] rebuilding..."
         docker compose @ComposeArgs down
+    } elseif ($Restart) {
+        Write-Host "[$InstanceName] restarting..."
+        docker compose @ComposeArgs down
     } else {
         Write-Host ""
         Write-Host "[$InstanceName] already running ($Environment)"
         Write-Host ""
         Write-Host "  ssh -p $SshPort claude@localhost"
         Write-Host ""
+        Show-SshWarnings
         exit 0
     }
 }
@@ -120,3 +194,4 @@ Write-Host "[$InstanceName] workspace: $DevDir ($Environment)"
 Write-Host ""
 Write-Host "  ssh -p $SshPort claude@localhost"
 Write-Host ""
+Show-SshWarnings
