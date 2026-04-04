@@ -5,7 +5,8 @@ param(
     [string]$Environment,
     [switch]$Rebuild,
     [switch]$Restart,
-    [switch]$CopySshKeys
+    [switch]$CopySshKeys,
+    [switch]$Connect
 )
 
 Set-StrictMode -Version Latest
@@ -82,7 +83,7 @@ if (-not $Environment) {
         }
         Write-Host ""
         Write-Host "Usage:"
-        Write-Host "  claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild]"
+        Write-Host "  claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild] [-Connect]"
         Write-Host "  claude-sandbox -Environment <name> -Restart"
         Write-Host "  claude-sandbox -CopySshKeys"
         Write-Host ""
@@ -95,6 +96,7 @@ if (-not $Environment) {
         Write-Host "  -Rebuild      Force rebuild without cache"
         Write-Host "  -Restart      Stop and restart the container (picks up new mounts)"
         Write-Host "  -CopySshKeys  Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
+        Write-Host "  -Connect      SSH into the container after starting"
         Write-Host ""
         exit 0
     }
@@ -186,6 +188,9 @@ if ($running -match $Environment) {
         Write-Host "  ssh -p $SshPort claude@localhost"
         Write-Host ""
         Show-SshWarnings
+        if ($Connect) {
+            ssh -o StrictHostKeyChecking=no -p $SshPort claude@localhost
+        }
         exit 0
     }
 }
@@ -225,3 +230,7 @@ Write-Host ""
 Write-Host "  ssh -p $SshPort claude@localhost"
 Write-Host ""
 Show-SshWarnings
+
+if ($Connect) {
+    ssh -o StrictHostKeyChecking=no -p $SshPort claude@localhost
+}

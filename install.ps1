@@ -21,7 +21,8 @@ param(
     [string]`$Environment,
     [switch]`$Rebuild,
     [switch]`$Restart,
-    [switch]`$CopySshKeys
+    [switch]`$CopySshKeys,
+    [switch]`$Connect
 )
 & '$ScriptPath' @PSBoundParameters
 "@
@@ -70,6 +71,4 @@ $ProfileContent = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
 if (-not $ProfileContent -or $ProfileContent -notlike "*.completions*claude-sandbox*") {
     Add-Content -Path $PROFILE -Value "`n# claude-sandbox tab completion`n$SourceLine"
     Write-Host "Added tab completion to PowerShell profile ($PROFILE)"
-} else {
-    Write-Host "Tab completion already in PowerShell profile"
 }

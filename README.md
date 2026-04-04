@@ -61,7 +61,7 @@ Two containers are orchestrated via Docker Compose:
 ### Launching a sandbox
 
 ```powershell
-claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild]
+claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild] [-Connect]
 claude-sandbox -Environment <name> -Restart
 claude-sandbox -CopySshKeys
 ```
@@ -73,6 +73,7 @@ claude-sandbox -CopySshKeys
 | `-SshPort`      | SSH port on the host (default: auto-assigned, range 2200-2999) |
 | `-Rebuild`      | Force rebuild of the container image                   |
 | `-Restart`      | Stop and restart the container (picks up new mounts)   |
+| `-Connect`      | SSH into the container after starting                  |
 | `-CopySshKeys`  | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
 
 Examples:
@@ -89,6 +90,9 @@ claude-sandbox -Environment dotnet -DevDir . -SshPort 2345 -Rebuild
 
 # Restart a running sandbox
 claude-sandbox -Environment base -Restart
+
+# Launch and immediately connect
+claude-sandbox -Environment base -Connect
 
 # Import SSH keys from ~/.ssh (works without -Environment)
 claude-sandbox -CopySshKeys
