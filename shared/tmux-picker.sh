@@ -36,10 +36,9 @@ show_menu() {
     clear
 
     # Print the banner
-    echo ""
-    echo -e "${C_PRIMARY}  ▖  ▟▙  ▗  ${C_RESET}  ${C_BOLD}Claude Sandbox${C_RESET}"
-    echo -e "${C_PRIMARY} ▟▜▖▟▛▜▙▗▛▙ ${C_RESET}  ${C_SECONDARY}${SANDBOX_ENV:-unknown}${C_RESET}"
-    echo -e "${C_PRIMARY} █▀██▀▀██▀█ ${C_RESET}  ${C_SECONDARY}${workspace}${C_RESET}"
+    echo -e "${C_PRIMARY}  ▖  ▟▙  ▗  ${C_RESET}  "
+    echo -e "${C_PRIMARY} ▟▜▖▟▛▜▙▗▛▙ ${C_RESET}  ${C_BOLD}Claude Sandbox${C_RESET}"
+    echo -e "${C_PRIMARY} █▀██▀▀██▀█ ${C_RESET}  ${C_SECONDARY}${SANDBOX_ENV:-unknown} · ${workspace}${C_RESET}"
     printf "${C_SECONDARY}…${C_PRIMARY}████  ████${C_SECONDARY}";
     printf '…%.0s' $(seq 1 $(( $(tput cols) - 11 )));
     printf "${C_RESET}\n"
@@ -154,16 +153,18 @@ while true; do
                 set-option status-left "$status_left" \; \
                 set-option status-right "$status_right"
         fi
+        REDRAW=1
         continue
     fi
 
     # Attach to session by key (1-9,0 maps to index 0-9)
     if [[ "$choice" =~ ^[0-9]$ ]]; then
-        local idx=$(( (choice + 9) % 10 ))
+        idx=$(( (choice + 9) % 10 ))
         session=$(get_session_name "$idx")
         if [ -n "$session" ]; then
             tmux attach -t "$session"
         fi
+        REDRAW=1
         continue
     fi
 done
