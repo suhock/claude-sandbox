@@ -5,18 +5,17 @@ export LANG=C.utf8
 
 MAX_SESSIONS=10
 
-# Configure tmux server options (idempotent)
-configure_tmux() {
-    tmux start-server 2>/dev/null
-    tmux set -s escape-time 50
-    tmux set -g mouse on
-    tmux set -g history-limit 100000
-    tmux set -g terminal-overrides 'xterm*:smcup@:rmcup@'
-    tmux set -g detach-on-destroy on
-    tmux set -g window-status-format ''
-    tmux set -g window-status-current-format ''
-}
-configure_tmux
+# Write tmux config file (loaded before any session starts)
+cat > ~/.tmux.conf << 'TMUX_CONF'
+set -s escape-time 200
+set -g mouse on
+set -g history-limit 100000
+set -g terminal-overrides 'xterm*:smcup@:rmcup@'
+set -g detach-on-destroy on
+set -g window-status-format ''
+set -g window-status-current-format ''
+TMUX_CONF
+tmux start-server 2>/dev/null
 
 # Colors
 C_RESET='\033[0m'
@@ -135,12 +134,14 @@ while true; do
 
         if [ "$choice" = "N" ]; then
             tmux new-session -s "claude-$n" "claude --dangerously-skip-permissions" \; \
+                set-option mouse on \; \
                 set-option status-style "bg=$scolor,fg=black" \; \
                 set-option status-left-length 80 \; \
                 set-option status-left "$status_left" \; \
                 set-option status-right "$status_right"
         else
             tmux new-session -s "claude-$n" \; \
+                set-option mouse on \; \
                 set-option status-style "bg=$scolor,fg=black" \; \
                 set-option status-left-length 80 \; \
                 set-option status-left "$status_left" \; \
