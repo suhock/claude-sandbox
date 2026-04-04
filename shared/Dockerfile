@@ -2,11 +2,12 @@ ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 # Shared setup
-COPY shared/setup.sh /tmp/setup.sh
-RUN bash /tmp/setup.sh --root
+COPY shared/setup-root.sh /tmp/setup-root.sh
+RUN bash /tmp/setup-root.sh
 
 USER claude
-RUN bash /tmp/setup.sh --user
+COPY shared/setup-user.sh /tmp/setup-user.sh
+RUN bash /tmp/setup-user.sh
 
 COPY --chmod=755 --chown=claude:claude shared/tmux-picker.sh /home/claude/tmux-picker.sh
 COPY --chmod=755 --chown=claude:claude shared/entrypoint.sh /entrypoint.sh

@@ -8,7 +8,7 @@ A Docker-based development environment that provides isolated, SSH-accessible wo
 
 ```
                                     ┌─────────────────────────────┐
-  SSH (port 2200-2999)              │     Claude Container        │
+  SSH (port 22000-22999)              │     Claude Container        │
  ─────────────────────────────────► │  Claude Code + tmux + SSH   │
                                     │  /workspace (bind mount)    │
                                     └────────────┬────────────────┘
@@ -52,7 +52,7 @@ Two containers are orchestrated via Docker Compose:
    .\install.ps1
    ```
 
-   This creates wrapper scripts in `~\.bin` and adds that directory to your user PATH.
+   This creates wrapper scripts in `~\.local\bin` and adds that directory to your user PATH.
 
 3. Restart your terminal so the PATH change takes effect.
 
@@ -61,22 +61,32 @@ Two containers are orchestrated via Docker Compose:
 ### Launching a sandbox
 
 ```powershell
-claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild] [-Connect]
-claude-sandbox -Environment <name> -Restart
-claude-sandbox -Environment <name> -AddFirewallRule
+claude-sandbox [-Start] [-Environment <name>] [-DevDir <path>] [-SshPort <port>]
+claude-sandbox -Restart [-Environment <name>] [-SshPort <port>]
+claude-sandbox -Rebuild [-Environment <name>] [-DevDir <path>] [-SshPort <port>]
+claude-sandbox -Connect [-Environment <name>]
 claude-sandbox -CopySshKeys
+claude-sandbox -AddFirewallRule [-Environment <name>]
 ```
 
-| Parameter       | Description                                           |
+**Commands** (mutually exclusive, default: `-Start`):
+
+| Command            | Description                                           |
+|--------------------|-------------------------------------------------------|
+| `-Start`           | Start the sandbox (build if necessary)                |
+| `-Restart`         | Stop and restart the container                        |
+| `-Rebuild`         | Force rebuild the container image                     |
+| `-Connect`         | SSH into the container                                |
+| `-CopySshKeys`     | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
+| `-AddFirewallRule` | Open the SSH port in Windows Firewall (requests elevation) |
+
+**Options:**
+
+| Option          | Description                                           |
 |-----------------|-------------------------------------------------------|
-| `-Environment`  | Environment type: `dotnet`, `php`, or `base`          |
+| `-Environment`  | Runtime environment (inferred if only one exists for directory) |
 | `-DevDir`       | Workspace directory (default: current directory)       |
-| `-SshPort`      | SSH port on the host (default: auto-assigned, range 2200-2999) |
-| `-Rebuild`      | Force rebuild of the container image                   |
-| `-Restart`      | Stop and restart the container (picks up new mounts)   |
-| `-Connect`      | SSH into the container after starting                  |
-| `-AddFirewallRule` | Open the SSH port in Windows Firewall (requires Administrator) |
-| `-CopySshKeys`  | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
+| `-SshPort`      | SSH port on the host (default: auto-assigned, range 22000-22999) |
 
 Examples:
 
@@ -93,13 +103,13 @@ claude-sandbox -Environment dotnet -DevDir . -SshPort 2345 -Rebuild
 # Restart a running sandbox
 claude-sandbox -Environment base -Restart
 
-# Launch and immediately connect
-claude-sandbox -Environment base -Connect
+# SSH into a running sandbox
+claude-sandbox -Connect
 
-# Open Windows Firewall for remote access (requires Administrator)
+# Open Windows Firewall for remote access (requests elevation)
 claude-sandbox -Environment dotnet -AddFirewallRule
 
-# Import SSH keys from ~/.ssh (works without -Environment)
+# Import SSH keys from ~/.ssh
 claude-sandbox -CopySshKeys
 ```
 
@@ -320,7 +330,8 @@ claude-sandbox/
 │   └── start.sh              # Proxy container entry point
 ├── shared/
 │   ├── Dockerfile            # Base image for all sandbox environments
-│   ├── setup.sh              # Two-phase setup (root + user)
+│   ├── setup-root.sh         # Root-level setup (packages, sshd, user creation)
+│   ├── setup-user.sh         # User-level setup (bashrc, Claude Code, tmux)
 │   ├── entrypoint.sh         # Container startup (plugin sync, SSH, etc.)
 │   └── tmux-picker.sh        # Interactive tmux session picker
 └── environments/
