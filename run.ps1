@@ -51,23 +51,53 @@ if ($CopySshKeys -and -not $Environment) {
 }
 
 if (-not $Environment) {
-    Write-Host ""
-    Write-Host "Usage:"
-    Write-Host "  claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild]"
-    Write-Host "  claude-sandbox -Environment <name> -Restart"
-    Write-Host "  claude-sandbox -CopySshKeys"
-    Write-Host ""
-    Write-Host "Environments: $($ValidEnvironments -join ', ')"
-    Write-Host ""
-    Write-Host "Options:"
-    Write-Host "  -Environment  Runtime environment"
-    Write-Host "  -DevDir       Workspace directory (default: current directory)"
-    Write-Host "  -SshPort      SSH port (default: auto-assigned)"
-    Write-Host "  -Rebuild      Force rebuild without cache"
-    Write-Host "  -Restart      Stop and restart the container (picks up new mounts)"
-    Write-Host "  -CopySshKeys  Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
-    Write-Host ""
-    exit 0
+    # Try to infer environment from previously used instances for this directory
+    $NormDir = $DevDir.TrimEnd('\', '/').Replace('\', '/').ToLower()
+    $DirLeaf = Split-Path $NormDir -Leaf
+    $SandboxDir = Join-Path $env:USERPROFILE ".claude-sandbox"
+    $MatchedEnvs = @()
+    if (Test-Path $SandboxDir) {
+        foreach ($env_ in $ValidEnvironments) {
+            $h = [System.BitConverter]::ToString(
+                [System.Security.Cryptography.SHA256]::Create().ComputeHash(
+                    [System.Text.Encoding]::UTF8.GetBytes("${NormDir}:${env_}")
+                )
+            ).Replace('-', '').Substring(0, 8).ToLower()
+            $candidate = Join-Path $SandboxDir "claude-$DirLeaf-$env_-$h"
+            if (Test-Path $candidate) {
+                $MatchedEnvs += $env_
+            }
+        }
+    }
+    if ($MatchedEnvs.Count -eq 1) {
+        $Environment = $MatchedEnvs[0]
+        Write-Host "Using environment: $Environment (inferred from previous use)"
+    } else {
+        if ($MatchedEnvs.Count -gt 1) {
+            Write-Host ""
+            Write-Host "Multiple environments found for this directory: $($MatchedEnvs -join ', ')"
+            Write-Host "Please specify one with -Environment <name>"
+            Write-Host ""
+            exit 1
+        }
+        Write-Host ""
+        Write-Host "Usage:"
+        Write-Host "  claude-sandbox -Environment <name> [-DevDir <path>] [-SshPort <port>] [-Rebuild]"
+        Write-Host "  claude-sandbox -Environment <name> -Restart"
+        Write-Host "  claude-sandbox -CopySshKeys"
+        Write-Host ""
+        Write-Host "Environments: $($ValidEnvironments -join ', ')"
+        Write-Host ""
+        Write-Host "Options:"
+        Write-Host "  -Environment  Runtime environment"
+        Write-Host "  -DevDir       Workspace directory (default: current directory)"
+        Write-Host "  -SshPort      SSH port (default: auto-assigned)"
+        Write-Host "  -Rebuild      Force rebuild without cache"
+        Write-Host "  -Restart      Stop and restart the container (picks up new mounts)"
+        Write-Host "  -CopySshKeys  Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
+        Write-Host ""
+        exit 0
+    }
 }
 
 if ($Environment -notin $ValidEnvironments) {

@@ -94,6 +94,18 @@ claude-sandbox -Environment base -Restart
 claude-sandbox -CopySshKeys
 ```
 
+If you've previously launched a sandbox for a directory and there is only one environment associated with it, you can omit `-Environment` and it will be inferred automatically:
+
+```powershell
+# First launch requires -Environment
+claude-sandbox -Environment dotnet -DevDir D:\projects\my-app
+
+# Subsequent launches infer the environment
+claude-sandbox -DevDir D:\projects\my-app
+```
+
+If multiple environments have been used with the same directory, you'll be prompted to specify which one.
+
 You can also run directly from the repository root without installing:
 
 ```powershell
