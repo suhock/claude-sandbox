@@ -16,6 +16,7 @@ $ErrorActionPreference = "Stop"
 
 # Sandbox config directory (shared across all instances)
 $SandboxDir = Join-Path $env:USERPROFILE ".claude-sandbox"
+
 if (-not (Test-Path $SandboxDir)) {
     New-Item -ItemType Directory -Force -Path $SandboxDir | Out-Null
 }
@@ -287,6 +288,11 @@ function Initialize-ComposeEnvironment([string]$InstanceName, [int]$Port) {
     $env:DEV_DIR = $DevDir
     $env:HOME = $env:USERPROFILE
     $env:CLAUDE_SSH_PORT = $Port
+
+    # Derive unique /28 subnet from port (port → 10.x.y.z/28, proxy at .2)
+    $base = $Port * 16
+    $env:SUBNET = "10.$([math]::Floor($base / 65536) % 256).$([math]::Floor($base / 256) % 256).$($base % 256)/28"
+    $env:PROXY_IP = "10.$([math]::Floor(($base + 2) / 65536) % 256).$([math]::Floor(($base + 2) / 256) % 256).$(($base + 2) % 256)"
     $env:HOST_PLUGINS_DIR = Join-Path (Join-Path $env:USERPROFILE ".claude") "plugins"
 
     # Per-instance state directory

@@ -2,9 +2,11 @@
 # Sync host plugins into the writable state directory
 if [ -d /host-plugins ]; then
     mkdir -p ~/.claude/plugins
+    
     # Always refresh marketplace data and plugin cache from host
     cp -a /host-plugins/marketplaces/. ~/.claude/plugins/marketplaces/ 2>/dev/null
     cp -a /host-plugins/cache/. ~/.claude/plugins/cache/ 2>/dev/null
+
     # Copy metadata files only if they don't already exist
     for f in installed_plugins.json known_marketplaces.json blocklist.json install-counts-cache.json; do
         if [ -f "/host-plugins/$f" ] && [ ! -f ~/.claude/plugins/"$f" ]; then

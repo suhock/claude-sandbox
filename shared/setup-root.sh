@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- Packages ---
 apt-get update && apt-get install -y \
-    git curl bash \
+    git curl bash iproute2 libcap2-bin \
     openssh-server tmux sudo
 
 # Install Node.js only if not already present (e.g., node:* base images)

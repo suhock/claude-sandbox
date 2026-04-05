@@ -1,0 +1,6 @@
+export LANG=C.utf8
+[ -f ~/.sandbox_env ] && . ~/.sandbox_env
+export PATH="/home/claude/.local/bin:${PATH}"
+export TERM=xterm-256color
+cd /workspace
+if [ -n "$SSH_CONNECTION" ] && [ -z "$TMUX" ]; then exec /home/claude/tmux-picker.sh; fi

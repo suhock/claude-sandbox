@@ -303,18 +303,26 @@ claude-sandbox -Environment base
 
 ## Network security
 
-The proxy container enforces a strict allowlist. Only HTTPS (port 443) connections to the following domains are permitted:
+The proxy container acts as a transparent gateway — all traffic from the sandbox is routed through it via iptables. Only connections to allowed domains are forwarded; everything else is dropped.
 
-| Domain                    | Purpose                   |
-|---------------------------|---------------------------|
-| `api.anthropic.com`       | Claude API                |
-| `platform.claude.com`     | Claude platform           |
-| `claude.ai`               | Claude web interface      |
-| `statsig.anthropic.com`   | Analytics                 |
-| `downloads.claude.ai`     | Asset downloads           |
-| `code.claude.com`         | Claude Code resources     |
+Base allowed domains are defined in `proxy/allowed-domains.conf`. To allow additional domains for a specific environment, create an `allowed-domains.conf` in the environment's folder and mount it in `compose.yml`:
 
-All other outbound traffic is denied. To allow additional domains, edit `proxy/squid.conf` and add entries to the `allowed_domains` ACL.
+```
+environments/dotnet/allowed-domains.conf:
+  api.nuget.org
+  globalcdn.nuget.org
+```
+
+```yaml
+services:
+  proxy:
+    volumes:
+      - ${SANDBOX_ROOT}/environments/dotnet/allowed-domains.conf:/etc/proxy/allowed-domains.d/env.conf:ro
+```
+
+To allow additional domains globally, add them to `proxy/allowed-domains.conf`.
+
+> **Warning:** Each domain you add expands the attack surface of the sandbox. An AI agent with network access could exfiltrate code, secrets, or conversation context to any allowed host. Only allow domains you trust and that the environment genuinely needs. Avoid broad wildcards or general-purpose hosts (e.g. `pastebin.com`, `github.com`) unless you fully understand the risk.
 
 ## Project structure
 
@@ -379,7 +387,7 @@ If Claude Code can't reach Anthropic services, check the proxy logs:
 docker compose -p <instance-name> logs proxy
 ```
 
-To allow additional domains, add them to the `allowed_domains` ACL in `proxy/squid.conf` and rebuild with `-Rebuild`.
+To allow additional domains for a specific environment, add an `allowed-domains.conf` to the environment's folder and mount it in its `compose.yml`. To allow them globally, add them to `proxy/allowed-domains.conf`. Either way, rebuild with `-Rebuild`.
 
 ### Rebuilding from scratch
 

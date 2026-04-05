@@ -1,16 +1,30 @@
 networks:
   claude-net:
     driver: bridge
-    internal: true
+    internal: false
+    ipam:
+      config:
+        - subnet: ${SUBNET}
 
 services:
   proxy:
-    build: ./proxy
+    build:
+      context: ${SANDBOX_ROOT:-.}
+      dockerfile: proxy/Dockerfile
+    environment:
+      - SANDBOX_ENV=${SANDBOX_ENV:-base}
     networks:
       claude-net:
+        ipv4_address: ${PROXY_IP}
       default:
+    ports:
+      - "${CLAUDE_SSH_PORT:-2222}:22"
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "3128"]
+      test: ["CMD", "nc", "-z", "127.0.0.1", "22"]
       interval: 2s
       timeout: 5s
       retries: 10
@@ -28,14 +42,15 @@ services:
         condition: service_healthy
     networks:
       claude-net:
-      default:
+    cap_add:
+      - NET_ADMIN
+    security_opt:
+      - seccomp:unconfined
+    dns:
+      - ${PROXY_IP}
     hostname: claude-sandbox
-    ports:
-      - "${CLAUDE_SSH_PORT:-2222}:22"
     environment:
-      - HTTPS_PROXY=http://proxy:3128
-      - HTTP_PROXY=http://proxy:3128
-      - NO_PROXY=localhost,127.0.0.1
+      - PROXY_IP=${PROXY_IP}
       - SANDBOX_ENV=${SANDBOX_ENV:-unknown}
       - SANDBOX_WORKSPACE=${SANDBOX_WORKSPACE:-workspace}
       - DISABLE_AUTOUPDATER=1
@@ -46,5 +61,5 @@ services:
       - ${CLAUDE_STATE_DIR:-/dev/null}/.claude.json:/home/claude/.claude.json
       - ${HOST_PLUGINS_DIR:-/dev/null}:/host-plugins:ro
       - ${SANDBOX_AUTHORIZED_KEYS}:/host-ssh-keys/authorized_keys:ro
-      - ${SANDBOX_ROOT:-.}/shared/tmux-picker.sh:/home/claude/tmux-picker.sh:ro
-      - ${SANDBOX_ROOT:-.}/shared/entrypoint.sh:/entrypoint.sh:ro
+      - ${SANDBOX_ROOT:-.}/shared/runtime/tmux-picker.sh:/home/claude/tmux-picker.sh:ro
+      - ${SANDBOX_ROOT:-.}/shared/runtime/entrypoint.sh:/entrypoint.sh:ro
