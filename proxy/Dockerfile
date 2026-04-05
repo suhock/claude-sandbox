@@ -1,6 +1,6 @@
 FROM alpine:3.21
 
-RUN apk add --no-cache dnsmasq socat iptables bind-tools
+RUN apk add --no-cache dnsmasq socat iptables ipset
 
 COPY proxy/dnsmasq.conf /etc/dnsmasq.conf
 RUN mkdir -p /etc/proxy/allowed-domains.d
