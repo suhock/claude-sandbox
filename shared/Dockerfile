@@ -11,6 +11,7 @@ COPY shared/config/ /tmp/shared/
 RUN bash /tmp/setup-user.sh
 
 COPY --chmod=755 --chown=claude:claude shared/runtime/tmux-picker.sh /home/claude/tmux-picker.sh
+COPY --chmod=755 --chown=claude:claude shared/runtime/new-window.sh /home/claude/new-window.sh
 COPY --chmod=755 --chown=claude:claude shared/runtime/entrypoint.sh /entrypoint.sh
 COPY --chmod=755 shared/runtime/init.sh /init.sh
 

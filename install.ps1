@@ -22,13 +22,12 @@ if (-not (Test-Path $BinDir)) {
 $Ast = [System.Management.Automation.Language.Parser]::ParseFile($SourceScript, [ref]$null, [ref]$null)
 $TypeAliases = @{ 'String' = 'string'; 'Int32' = 'int'; 'SwitchParameter' = 'switch' }
 $HiddenParams = @('SandboxDev')
-$ParamLines = $Ast.ParamBlock.Parameters | Where-Object {
-    $_.Name.VariablePath.UserPath -notin $HiddenParams
-} | ForEach-Object {
+$ParamLines = $Ast.ParamBlock.Parameters | ForEach-Object {
     $type = $_.StaticType.Name
     if ($TypeAliases.ContainsKey($type)) { $type = $TypeAliases[$type] }
     $name = $_.Name.VariablePath.UserPath
-    "    [$type]`$$name"
+    $attr = if ($name -in $HiddenParams) { "    [Parameter(DontShow)]`n" } else { "" }
+    "${attr}    [$type]`$$name"
 }
 $WrapperParamBlock = $ParamLines -join ",`n"
 

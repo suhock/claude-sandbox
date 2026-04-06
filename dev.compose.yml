@@ -4,3 +4,5 @@ services:
       - ${SANDBOX_ROOT:-.}/shared/runtime/init.sh:/init.sh:ro
       - ${SANDBOX_ROOT:-.}/shared/runtime/entrypoint.sh:/entrypoint.sh:ro
       - ${SANDBOX_ROOT:-.}/shared/runtime/tmux-picker.sh:/home/claude/tmux-picker.sh:ro
+      - ${SANDBOX_ROOT:-.}/shared/runtime/new-window.sh:/home/claude/new-window.sh:ro
+      - ${SANDBOX_ROOT:-.}/shared/config/tmux.conf:/home/claude/.tmux-sandbox.conf:ro

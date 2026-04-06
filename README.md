@@ -201,16 +201,18 @@ claude-sandbox -Environment dotnet -AddFirewallRule
 
 Then connect with `ssh -p <port> claude@<dev-machine-ip>`.
 
-### Working with tmux sessions
+### Working with tmux
 
-When you SSH in, an interactive session picker is displayed:
+When you SSH in, you're automatically attached to a tmux session. On first connect, a Claude Code window is created. Windows persist across SSH disconnections, so you can reconnect and pick up where you left off.
 
-- **N** -- Create a new Claude Code session (launches the Claude REPL)
-- **S** -- Create a new shell session
-- **0-9** -- Attach to an existing session
-- **Q** -- Quit (disconnect)
+**Creating new windows:**
 
-Sessions persist across SSH disconnections, so you can reconnect and pick up where you left off. Each session gets a color-coded tmux status bar showing the workspace name and environment.
+| Method | Claude Code | Bash |
+|--------|------------|------|
+| Keyboard | `Ctrl-b c` | `Ctrl-b b` |
+| Status bar | Click `c:+Claude` | Click `b:+Bash` |
+
+**Switching windows:** Click a window tab in the status bar, or use `Ctrl-b <number>`.
 
 ### Managing instances
 
