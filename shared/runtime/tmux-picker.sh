@@ -122,8 +122,8 @@ create_session() {
     # Assign a distinct status bar color based on session number
     local color_idx=$(( (n - 1) % ${#SESSION_COLORS[@]} ))
     local scolor="colour${SESSION_COLORS[$color_idx]}"
-    local status_left=" ${SANDBOX_WORKSPACE:-workspace} · ${SANDBOX_ENV:-unknown} "
-    local status_right=" #I:#W* · #S "
+    local status_left=" ${SANDBOX_WORKSPACE:-workspace} · ${SANDBOX_ENV:-unknown} · "
+    local status_right=" #S "
 
     tmux new-session -s "${name}-$n" $cmd \; \
         set-option mouse on \; \
