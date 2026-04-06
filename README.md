@@ -61,9 +61,9 @@ Two containers are orchestrated via Docker Compose:
 ### Launching a sandbox
 
 ```powershell
-claude-sandbox [-Start] [-Environment <name>] [-DevDir <path>] [-SshPort <port>]
+claude-sandbox [-Start] [-Environment <name>] [-WorkDir <path>] [-SshPort <port>]
 claude-sandbox -Restart [-Environment <name>] [-SshPort <port>]
-claude-sandbox -Rebuild [-Environment <name>] [-DevDir <path>] [-SshPort <port>]
+claude-sandbox -Rebuild [-Environment <name>] [-WorkDir <path>] [-SshPort <port>]
 claude-sandbox -Connect [-Environment <name>]
 claude-sandbox -CopySshKeys
 claude-sandbox -AddFirewallRule [-Environment <name>]
@@ -85,7 +85,7 @@ claude-sandbox -AddFirewallRule [-Environment <name>]
 | Option          | Description                                           |
 |-----------------|-------------------------------------------------------|
 | `-Environment`  | Runtime environment (inferred if only one exists for directory) |
-| `-DevDir`       | Workspace directory (default: current directory)       |
+| `-WorkDir`       | Workspace directory (default: current directory)       |
 | `-SshPort`      | SSH port on the host (default: auto-assigned, range 22000-22999) |
 
 Examples:
@@ -95,10 +95,10 @@ Examples:
 claude-sandbox -Environment base
 
 # Launch a PHP sandbox for a specific project
-claude-sandbox -Environment php -DevDir D:\projects\my-php-app
+claude-sandbox -Environment php -WorkDir D:\projects\my-php-app
 
 # Rebuild a .NET sandbox with a custom SSH port
-claude-sandbox -Environment dotnet -DevDir . -SshPort 2345 -Rebuild
+claude-sandbox -Environment dotnet -WorkDir . -SshPort 2345 -Rebuild
 
 # Restart a running sandbox
 claude-sandbox -Environment base -Restart
@@ -117,10 +117,10 @@ If you've previously launched a sandbox for a directory and there is only one en
 
 ```powershell
 # First launch requires -Environment
-claude-sandbox -Environment dotnet -DevDir D:\projects\my-app
+claude-sandbox -Environment dotnet -WorkDir D:\projects\my-app
 
 # Subsequent launches infer the environment
-claude-sandbox -DevDir D:\projects\my-app
+claude-sandbox -WorkDir D:\projects\my-app
 ```
 
 If multiple environments have been used with the same directory, you'll be prompted to specify which one.
@@ -128,7 +128,7 @@ If multiple environments have been used with the same directory, you'll be promp
 You can also run directly from the repository root without installing:
 
 ```powershell
-.\run.ps1 -Environment base -DevDir D:\projects\myapp
+.\run.ps1 -Environment base -WorkDir D:\projects\myapp
 ```
 
 ### SSH authentication
@@ -352,6 +352,16 @@ claude-sandbox/
     └── base/                 # Node.js 22 environment
         └── compose.yml
 ```
+
+## Developing the sandbox
+
+When working on the sandbox's own runtime scripts (`shared/runtime/`), use the hidden `-SandboxDev` flag to bind-mount them into the container instead of using the copies baked into the image. This lets you edit scripts on the host and see changes immediately on the next connection or restart, without rebuilding.
+
+```powershell
+claude-sandbox -Environment base -SandboxDev
+```
+
+The overrides are defined in `dev.compose.yml`.
 
 ## Troubleshooting
 

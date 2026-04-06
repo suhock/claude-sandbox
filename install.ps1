@@ -20,8 +20,13 @@ if (-not (Test-Path $BinDir)) {
 
 # Extract parameter declarations from run.ps1 for tab completion in wrapper script
 $Ast = [System.Management.Automation.Language.Parser]::ParseFile($SourceScript, [ref]$null, [ref]$null)
-$ParamLines = $Ast.ParamBlock.Parameters | ForEach-Object {
+$TypeAliases = @{ 'String' = 'string'; 'Int32' = 'int'; 'SwitchParameter' = 'switch' }
+$HiddenParams = @('SandboxDev')
+$ParamLines = $Ast.ParamBlock.Parameters | Where-Object {
+    $_.Name.VariablePath.UserPath -notin $HiddenParams
+} | ForEach-Object {
     $type = $_.StaticType.Name
+    if ($TypeAliases.ContainsKey($type)) { $type = $TypeAliases[$type] }
     $name = $_.Name.VariablePath.UserPath
     "    [$type]`$$name"
 }

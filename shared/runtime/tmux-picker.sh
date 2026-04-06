@@ -6,8 +6,8 @@ export LANG=C.utf8
 
 MAX_SESSIONS=10
 
-# Start tmux server (reads ~/.tmux.conf written at build time)
-tmux start-server 2>/dev/null
+# Start tmux server with our sandbox config (separate from Claude Code's .tmux.conf)
+tmux -f ~/.tmux-sandbox.conf start-server 2>/dev/null
 
 # Color palette
 C_RESET='\033[0m'

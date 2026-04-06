@@ -12,5 +12,5 @@ curl -fsSL https://claude.ai/install.sh | bash
 export PATH="/home/claude/.local/bin:${PATH}"
 claude install
 
-# --- tmux (after claude install, which may write its own .tmux.conf) ---
-cp /tmp/shared/tmux.conf ~/.tmux.conf
+# --- tmux (placed separately so Claude Code's .tmux.conf doesn't conflict) ---
+cp /tmp/shared/tmux.conf ~/.tmux-sandbox.conf

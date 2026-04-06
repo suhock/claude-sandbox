@@ -1,0 +1,6 @@
+services:
+  claude:
+    volumes:
+      - ${SANDBOX_ROOT:-.}/shared/runtime/init.sh:/init.sh:ro
+      - ${SANDBOX_ROOT:-.}/shared/runtime/entrypoint.sh:/entrypoint.sh:ro
+      - ${SANDBOX_ROOT:-.}/shared/runtime/tmux-picker.sh:/home/claude/tmux-picker.sh:ro

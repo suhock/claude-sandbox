@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$DevDir = (Get-Location).Path,
+    [string]$WorkDir = (Get-Location).Path,
     [int]$SshPort = 0,
     [string]$Environment,
     [switch]$Start,
@@ -8,7 +8,8 @@ param(
     [switch]$Restart,
     [switch]$CopySshKeys,
     [switch]$Connect,
-    [switch]$AddFirewallRule
+    [switch]$AddFirewallRule,
+    [switch]$SandboxDev
 )
 
 Set-StrictMode -Version Latest
@@ -30,6 +31,10 @@ $ValidEnvironments = Get-ChildItem -Directory (Join-Path $PSScriptRoot "environm
 
 function Main {
     $ExclusiveFlags = @(@($Start, $Rebuild, $Restart, $Connect, $CopySshKeys, $AddFirewallRule) | Where-Object { $_ })
+    if ($SandboxDev -and ($Connect -or $CopySshKeys -or $AddFirewallRule)) {
+        Write-Error "-Dev can only be used with -Start, -Rebuild, or -Restart"
+        exit 1
+    }
 
     if ($ExclusiveFlags.Count -gt 1) {
         Write-Error "Only one of -Start, -Rebuild, -Restart, -Connect, -CopySshKeys, -AddFirewallRule can be specified"
@@ -74,11 +79,11 @@ function Main {
 function Show-Usage {
     Write-Host ""
     Write-Host "Usage:"
-    Write-Host "  claude-sandbox [-Start] [-Environment <name>] [-DevDir <path>]"
+    Write-Host "  claude-sandbox [-Start] [-Environment <name>] [-WorkDir <path>]"
     Write-Host "                 [-SshPort <port>]"
-    Write-Host "  claude-sandbox -Restart [-Environment <name>] [-DevDir <path>]"
+    Write-Host "  claude-sandbox -Restart [-Environment <name>] [-WorkDir <path>]"
     Write-Host "                 [-SshPort <port>]"
-    Write-Host "  claude-sandbox -Rebuild [-Environment <name>] [-DevDir <path>]"
+    Write-Host "  claude-sandbox -Rebuild [-Environment <name>] [-WorkDir <path>]"
     Write-Host "                 [-SshPort <port>]"
     Write-Host "  claude-sandbox -Connect [-Environment <name>]"
     Write-Host "  claude-sandbox -CopySshKeys"
@@ -96,22 +101,22 @@ function Show-Usage {
     Write-Host ""
     Write-Host "Options:"
     Write-Host "  -Environment  Runtime environment (inferred if only one exists for directory)"
-    Write-Host "  -DevDir       Workspace directory (default: current directory)"
+    Write-Host "  -WorkDir       Workspace directory (default: current directory)"
     Write-Host "  -SshPort      SSH port (default: auto-assigned)"
     Write-Host ""
 }
 
 function Get-InstanceName([string]$Env) {
-    $NormalizedDevDir = $DevDir.TrimEnd('\', '/').Replace('\', '/').ToLower()
-    $DevDirLeaf = Split-Path $NormalizedDevDir -Leaf
+    $NormalizedWorkDir = $WorkDir.TrimEnd('\', '/').Replace('\', '/').ToLower()
+    $WorkDirName = Split-Path $NormalizedWorkDir -Leaf
 
     $hash = [System.BitConverter]::ToString(
         [System.Security.Cryptography.SHA256]::Create().ComputeHash(
-            [System.Text.Encoding]::UTF8.GetBytes("${NormalizedDevDir}:${Env}")
+            [System.Text.Encoding]::UTF8.GetBytes("${NormalizedWorkDir}:${Env}")
         )
     ).Replace('-', '').Substring(0, 8).ToLower()
 
-    "claude-$DevDirLeaf-$Env-$hash"
+    "claude-$WorkDirName-$Env-$hash"
 }
 
 function Get-SshPort([string]$InstanceName) {
@@ -275,6 +280,10 @@ function Get-ComposeContext {
     $Port = Get-SshPort $InstanceName
     $ComposeArgs = @("-f", (Join-Path $PSScriptRoot "docker-compose.yml"), "-f", (Join-Path $PSScriptRoot "environments" $Environment "compose.yml"))
 
+    if ($SandboxDev) {
+        $ComposeArgs += @("-f", (Join-Path $PSScriptRoot "dev.compose.yml"))
+    }
+
     Initialize-ComposeEnvironment $InstanceName $Port
 
     @{ InstanceName = $InstanceName; Port = $Port; ComposeArgs = $ComposeArgs }
@@ -284,8 +293,8 @@ function Initialize-ComposeEnvironment([string]$InstanceName, [int]$Port) {
     $env:COMPOSE_PROJECT_NAME = $InstanceName
     $env:SANDBOX_ROOT = $PSScriptRoot
     $env:SANDBOX_ENV = $Environment
-    $env:SANDBOX_WORKSPACE = (Split-Path $DevDir -Leaf)
-    $env:DEV_DIR = $DevDir
+    $env:SANDBOX_WORKSPACE = (Split-Path $WorkDir -Leaf)
+    $env:DEV_DIR = $WorkDir
     $env:HOME = $env:USERPROFILE
     $env:CLAUDE_SSH_PORT = $Port
 
@@ -363,7 +372,7 @@ function Show-ConnectionInfo([string]$InstanceName, [int]$Port) {
     $HasAuthorizedKeys = (Get-Item $env:SANDBOX_AUTHORIZED_KEYS).Length -gt 0
 
     Write-Host ""
-    Write-Host "[$InstanceName] workspace: $DevDir ($Environment)"
+    Write-Host "[$InstanceName] workspace: $WorkDir ($Environment)"
     Write-Host ""
     Write-Host "  ssh -p $Port claude@localhost"
     Write-Host ""
