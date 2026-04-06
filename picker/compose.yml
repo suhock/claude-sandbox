@@ -1,0 +1,11 @@
+services:
+  picker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${SANDBOX_AUTHORIZED_KEYS}:/host-ssh-keys/authorized_keys
+    ports:
+      - "${PICKER_SSH_PORT:-22000}:22"
+    restart: unless-stopped

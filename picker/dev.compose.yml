@@ -1,0 +1,5 @@
+services:
+  picker:
+    volumes:
+      - ${SANDBOX_ROOT:-.}/picker/picker.sh:/usr/local/bin/picker.sh:ro
+      - ${SANDBOX_ROOT:-.}/picker/entrypoint.sh:/entrypoint.sh:ro

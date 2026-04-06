@@ -14,6 +14,9 @@ fi
 
 apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Clear MOTD
+: > /etc/motd
+
 # --- sshd (key-only authentication) ---
 mkdir -p /run/sshd
 sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config

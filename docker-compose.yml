@@ -17,6 +17,9 @@ services:
       claude-net:
         ipv4_address: ${PROXY_IP}
       default:
+    labels:
+      - sandbox.env=${SANDBOX_ENV:-unknown}
+      - sandbox.workspace=${SANDBOX_WORKSPACE:-workspace}
     ports:
       - "${CLAUDE_SSH_PORT:-2222}:22"
     cap_add:

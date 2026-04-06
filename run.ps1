@@ -32,7 +32,7 @@ $ValidEnvironments = Get-ChildItem -Directory (Join-Path $PSScriptRoot "environm
 function Main {
     $ExclusiveFlags = @(@($Start, $Rebuild, $Restart, $Connect, $CopySshKeys, $AddFirewallRule) | Where-Object { $_ })
     if ($SandboxDev -and ($Connect -or $CopySshKeys -or $AddFirewallRule)) {
-        Write-Error "-Dev can only be used with -Start, -Rebuild, or -Restart"
+        Write-Error "-SandboxDev can only be used with -Start, -Rebuild, or -Restart"
         exit 1
     }
 
@@ -122,7 +122,7 @@ function Get-InstanceName([string]$Env) {
 function Get-SshPort([string]$InstanceName) {
     if ($SshPort -ne 0) { return $SshPort }
     $PortHash = $InstanceName.Substring($InstanceName.LastIndexOf('-') + 1)
-    22000 + [Convert]::ToInt32($PortHash.Substring(0, 4), 16) % 1000
+    22001 + [Convert]::ToInt32($PortHash.Substring(0, 4), 16) % 999
 }
 
 function Resolve-Environment {
@@ -155,31 +155,53 @@ function Invoke-AddFirewallRule {
 
     $name = Get-InstanceName $Environment
     $port = Get-SshPort $name
-    $RuleName = "Claude Sandbox - $name"
-    $existing = netsh advfirewall firewall show rule name="$RuleName" 2>$null
+    $PickerPort = $env:PICKER_SSH_PORT
+    if (-not $PickerPort) { $PickerPort = 22000 }
 
-    if ($existing -match "Rule Name") {
-        Write-Host "Firewall rule already exists: $RuleName (port $port)"
+    $rules = @(
+        @{ Name = "Claude Sandbox - $name"; Port = $port },
+        @{ Name = "Claude Sandbox Picker"; Port = $PickerPort }
+    )
+
+    # Filter to only rules that don't already exist
+    $needed = @()
+    foreach ($rule in $rules) {
+        $existing = netsh advfirewall firewall show rule name="$($rule.Name)" 2>$null
+        if ($existing -notmatch "Rule Name") {
+            $needed += $rule
+        }
+    }
+
+    if ($needed.Count -eq 0) {
+        Write-Host "Firewall rules already exist"
         return 0
     }
 
-    # Self-elevate if not running as Administrator
+    # Build a single command for all rules
+    $cmds = $needed | ForEach-Object {
+        "netsh advfirewall firewall add rule name='$($_.Name)' dir=in action=allow protocol=TCP localport=$($_.Port)"
+    }
+    $combined = $cmds -join "; "
+
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
     if (-not $isAdmin) {
-        $proc = Start-Process powershell -Verb RunAs -Wait -PassThru -ArgumentList "-NoProfile -Command `"netsh advfirewall firewall add rule name='$RuleName' dir=in action=allow protocol=TCP localport=$port`""
+        $proc = Start-Process powershell -Verb RunAs -Wait -PassThru -ArgumentList "-NoProfile -Command `"$combined`""
 
         if ($proc.ExitCode -ne 0) {
             Write-Host ""
-            Write-Host "ERROR: Failed to add firewall rule." -ForegroundColor Red
+            Write-Host "ERROR: Failed to add firewall rules." -ForegroundColor Red
             Write-Host ""
             return 1
         }
     } else {
-        netsh advfirewall firewall add rule name="$RuleName" dir=in action=allow protocol=TCP localport=$port
+        foreach ($cmd in $cmds) { Invoke-Expression $cmd }
     }
 
-    Write-Host "Added firewall rule: $RuleName (TCP port $port)"
+    foreach ($rule in $needed) {
+        Write-Host "Added firewall rule: $($rule.Name) (TCP port $($rule.Port))"
+    }
+
     return 0
 }
 
@@ -237,6 +259,35 @@ function Invoke-Connect {
     ssh -o StrictHostKeyChecking=no -p $Port claude@localhost
 }
 
+function Stop-Picker {
+    $PickerCompose = Join-Path $PSScriptRoot "picker" "compose.yml"
+    $env:SANDBOX_AUTHORIZED_KEYS = $AuthorizedKeysFile
+    docker compose -f $PickerCompose -p claude-picker down 2>$null
+}
+
+function Ensure-Picker {
+    $PickerComposeArgs = @("-f", (Join-Path $PSScriptRoot "picker" "compose.yml"))
+    if ($SandboxDev) {
+        $PickerComposeArgs += @("-f", (Join-Path $PSScriptRoot "picker" "dev.compose.yml"))
+    }
+
+    # Ensure authorized keys exist
+    if (-not (Test-Path $AuthorizedKeysFile)) {
+        New-Item -ItemType File -Force -Path $AuthorizedKeysFile | Out-Null
+    }
+
+    $env:SANDBOX_AUTHORIZED_KEYS = $AuthorizedKeysFile
+
+    $Port = $env:PICKER_SSH_PORT
+    if (-not $Port) { $Port = 22000 }
+
+    $running = docker compose @PickerComposeArgs -p claude-picker ps --status running --format "{{.Name}}" 2>$null
+    if (-not ($running -match "picker")) {
+        docker compose @PickerComposeArgs -p claude-picker up -d --build
+        ssh-keygen -R "[localhost]:$Port" 2>$null
+    }
+}
+
 function Invoke-Start {
     $ctx = Get-ComposeContext
 
@@ -265,6 +316,8 @@ function Invoke-Rebuild {
     if (Test-SandboxRunning $ctx.ComposeArgs) {
         docker compose @($ctx.ComposeArgs) down
     }
+
+    Stop-Picker
 
     Invoke-SandboxBuild $ctx
     Invoke-SandboxUp $ctx
@@ -329,6 +382,7 @@ function Invoke-SandboxBuild([hashtable]$ctx) {
 }
 
 function Invoke-SandboxUp([hashtable]$ctx) {
+    Ensure-Picker
     docker compose @($ctx.ComposeArgs) up -d
     Wait-ForSshd $ctx.Port
     Show-ConnectionInfo $ctx.InstanceName $ctx.Port
@@ -371,10 +425,17 @@ function Initialize-StateDirectory {
 function Show-ConnectionInfo([string]$InstanceName, [int]$Port) {
     $HasAuthorizedKeys = (Get-Item $env:SANDBOX_AUTHORIZED_KEYS).Length -gt 0
 
+    $PickerPort = $env:PICKER_SSH_PORT
+    if (-not $PickerPort) { $PickerPort = 22000 }
+
     Write-Host ""
     Write-Host "[$InstanceName] workspace: $WorkDir ($Environment)"
     Write-Host ""
-    Write-Host "  ssh -p $Port claude@localhost"
+    Write-Host "  Connect directly to the sandbox:"
+    Write-Host "      ssh -p $Port claude@localhost"
+    Write-Host ""
+    Write-Host "  Connect through the sandbox picker:"
+    Write-Host "      ssh -p $PickerPort claude@localhost"
     Write-Host ""
 
     Show-SshWarnings $HasAuthorizedKeys

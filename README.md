@@ -1,34 +1,34 @@
 # Claude Sandbox
 
-A Docker-based development environment that provides isolated, SSH-accessible workspaces for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Each sandbox runs in its own container with a restrictive network proxy that only allows traffic to Anthropic services, keeping your development environment secure by default.
+A Docker-based development environment for Windows that provides isolated, SSH-accessible workspaces for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Each sandbox runs in its own container with a restrictive network proxy that only allows traffic to Anthropic services, keeping your development environment secure by default.
 
 > **NOTE:** These instances should not be directly exposed to the public internet. See [Remote Access](#remote-access) for connecting from other devices.
 
 ## Architecture
 
 ```
-                                    ┌─────────────────────────────┐
-  SSH (port 22000-22999)              │     Claude Container        │
- ─────────────────────────────────► │  Claude Code + tmux + SSH   │
-                                    │  /workspace (bind mount)    │
-                                    └────────────┬────────────────┘
-                                                 │ HTTP/HTTPS
-                                                 ▼
-                                    ┌─────────────────────────────┐
-                                    │     Proxy Container         │
-                                    │  Squid (allowlist-only)     │
-                                    │  DNSmasq                    │
-                                    └────────────┬────────────────┘
-                                                 │ HTTPS (443)
-                                                 ▼
-                                         Anthropic services only
-                                         (api.anthropic.com, etc.)
+  SSH (port 22000)        ┌─────────────────────────────┐
+  ──────────────────────► │  Picker                     │
+                          └────────────┬────────────────┘
+                                   SSH │
+                                       ▼
+  SSH (port 22001-22999)  ┌────────────────────────────┐
+  ──────────────────────► │  Proxy/Gateway             │
+                          │  iptables + DNSmasq        │
+                          └───┬────────────────────┬───┘
+                          SSH │              HTTPS │
+                              ▼                    ▼
+                          ┌───────────────┐    Anthropic
+                          │  Claude Code  │    services only
+                          │  tmux         │
+                          └───────────────┘
 ```
 
-Two containers are orchestrated via Docker Compose:
+Three containers are involved:
 
-- **Proxy** -- Squid HTTP proxy + DNSmasq DNS server. All outbound traffic from the sandbox is routed through this proxy, which only allows HTTPS connections to Anthropic-owned domains.
+- **Proxy** -- iptables-based transparent proxy + DNSmasq DNS server. All outbound traffic from the sandbox is routed through this proxy, which only allows HTTPS connections to Anthropic-owned domains by default.
 - **Claude** -- The development container. Runs SSH, tmux, and Claude Code. Your project directory is bind-mounted at `/workspace`.
+- **Picker** -- A lightweight management container that discovers all running and stopped sandboxes via the Docker socket. Provides a single SSH entry point (port 22000) with an interactive menu for selecting and connecting to sandboxes. Started automatically alongside any sandbox.
 
 ## Prerequisites
 
@@ -78,7 +78,7 @@ claude-sandbox -AddFirewallRule [-Environment <name>]
 | `-Rebuild`         | Force rebuild the container image                     |
 | `-Connect`         | SSH into the container                                |
 | `-CopySshKeys`     | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
-| `-AddFirewallRule` | Open the SSH port in Windows Firewall (requests elevation) |
+| `-AddFirewallRule` | Open SSH ports (sandbox + picker) in Windows Firewall (requests elevation) |
 
 **Options:**
 
@@ -86,7 +86,7 @@ claude-sandbox -AddFirewallRule [-Environment <name>]
 |-----------------|-------------------------------------------------------|
 | `-Environment`  | Runtime environment (inferred if only one exists for directory) |
 | `-WorkDir`       | Workspace directory (default: current directory)       |
-| `-SshPort`      | SSH port on the host (default: auto-assigned, range 22000-22999) |
+| `-SshPort`      | SSH port on the host (default: auto-assigned, range 22001-22999) |
 
 Examples:
 
@@ -162,17 +162,41 @@ This can be run at any time, including against already-running sandboxes, to ref
 
 ### Connecting via SSH
 
-Once the sandbox is running, the script outputs the SSH command:
+Once the sandbox is running, the script outputs two connection options:
 
-```bash
-ssh -p <port> claude@localhost
 ```
+  Connect directly to the sandbox:
+      ssh -p <port> claude@localhost
+
+  Connect through the sandbox picker:
+      ssh -p 22000 claude@localhost
+```
+
+The **sandbox picker** is started automatically alongside any sandbox. It listens on port 22000 and presents an interactive menu listing all running and stopped sandboxes. Selecting a stopped sandbox will start it automatically. This is especially useful for remote access, where you only need to remember one port.
 
 ### Remote access
 
-Sandboxes listen on `localhost` only. To connect from another device (phone, tablet, laptop), there are two approaches:
+To connect from another device (phone, tablet, laptop), first open the firewall:
 
-**SSH jump host (recommended)** -- Keep the sandbox on `localhost` and chain through your dev machine using `ProxyJump`. This requires the OpenSSH server to be running on your Windows machine. To enable it (from an elevated PowerShell prompt):
+```powershell
+claude-sandbox -Environment dotnet -AddFirewallRule
+```
+
+This opens ports for both the sandbox and the picker (port 22000) in Windows Firewall.
+
+**Via the picker (recommended)** -- Connect to the picker from any device and select a sandbox from the menu:
+
+```bash
+ssh -p 22000 claude@<dev-machine-ip>
+```
+
+**Direct connection** -- Connect to a specific sandbox by port:
+
+```bash
+ssh -p <port> claude@<dev-machine-ip>
+```
+
+**SSH jump host** -- If Docker ports are not directly reachable, chain through your dev machine using `ProxyJump`. This requires the OpenSSH server to be running on your Windows machine. To enable it (from an elevated PowerShell prompt):
 
 ```powershell
 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
@@ -185,21 +209,12 @@ On the connecting device, add to `~/.ssh/config`:
 ```
 Host sandbox
     HostName localhost
-    Port <sandbox-port>
+    Port 22000
     User claude
     ProxyJump <user>@<dev-machine-ip>
 ```
 
-Then connect with `ssh sandbox`. SSH clients like [Termius](https://termius.com/) (Android, iOS, desktop) support this kind of chained connection natively.
-
-**Port exposure** -- Alternatively, bind the SSH port to your dev machine's network interface so other devices can connect directly. Change the port mapping in `docker-compose.yml` from `"${CLAUDE_SSH_PORT:-2222}:22"` to `"0.0.0.0:${CLAUDE_SSH_PORT:-2222}:22"`. You'll also need to open the port in Windows Firewall:
-
-```powershell
-# Requires an elevated (Administrator) PowerShell prompt
-claude-sandbox -Environment dotnet -AddFirewallRule
-```
-
-Then connect with `ssh -p <port> claude@<dev-machine-ip>`.
+Then connect with `ssh sandbox`.
 
 ### Working with tmux
 
@@ -331,19 +346,32 @@ To allow additional domains globally, add them to `proxy/allowed-domains.conf`.
 ```
 claude-sandbox/
 ├── docker-compose.yml        # Main orchestration (proxy + claude services)
+├── dev.compose.yml           # Dev overrides (bind-mounts runtime scripts)
 ├── run.ps1                   # Entry point for launching sandboxes
 ├── install.ps1               # CLI installation script
 ├── proxy/
 │   ├── Dockerfile            # Alpine-based proxy image
-│   ├── squid.conf            # HTTP proxy allowlist rules
 │   ├── dnsmasq.conf          # DNS configuration
+│   ├── allowed-domains.conf  # Base domain allowlist
 │   └── start.sh              # Proxy container entry point
 ├── shared/
 │   ├── Dockerfile            # Base image for all sandbox environments
 │   ├── setup-root.sh         # Root-level setup (packages, sshd, user creation)
 │   ├── setup-user.sh         # User-level setup (bashrc, Claude Code, tmux)
-│   ├── entrypoint.sh         # Container startup (plugin sync, SSH, etc.)
-│   └── tmux-picker.sh        # Interactive tmux session picker
+│   ├── config/
+│   │   ├── tmux.conf         # Tmux configuration (status bar, key bindings)
+│   │   └── bashrc.append     # Appended to ~/.bashrc at build time
+│   └── runtime/
+│       ├── init.sh           # Container init (networking, drops to claude user)
+│       ├── entrypoint.sh     # Container startup (plugin sync, SSH, etc.)
+│       ├── tmux-picker.sh    # Tmux session attach/create on SSH connect
+│       └── new-window.sh     # Creates new tmux windows (used by status bar buttons)
+├── picker/
+│   ├── Dockerfile            # Alpine-based picker image
+│   ├── compose.yml           # Picker container orchestration
+│   ├── dev.compose.yml       # Dev overrides for picker
+│   ├── picker.sh             # Interactive sandbox discovery and menu
+│   └── entrypoint.sh         # Injects picker SSH key into authorized_keys
 └── environments/
     ├── dotnet/               # .NET 10.0 environment
     │   ├── compose.yml
@@ -357,13 +385,13 @@ claude-sandbox/
 
 ## Developing the sandbox
 
-When working on the sandbox's own runtime scripts (`shared/runtime/`), use the hidden `-SandboxDev` flag to bind-mount them into the container instead of using the copies baked into the image. This lets you edit scripts on the host and see changes immediately on the next connection or restart, without rebuilding.
+When working on the sandbox's own runtime scripts, use the hidden `-SandboxDev` flag to bind-mount them into the containers instead of using the copies baked into the images. This lets you edit scripts on the host and see changes immediately on the next connection or restart, without rebuilding.
 
 ```powershell
 claude-sandbox -Environment base -SandboxDev
 ```
 
-The overrides are defined in `dev.compose.yml`.
+This applies dev overrides to both the sandbox (`dev.compose.yml`) and the picker (`picker/dev.compose.yml`). Use `-Rebuild` to force a full rebuild of both.
 
 ## Troubleshooting
 
