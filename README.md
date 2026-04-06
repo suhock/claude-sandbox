@@ -91,17 +91,13 @@ claude-sandbox -AddFirewallRule [-Environment <name>]
 Examples:
 
 ```powershell
-# Launch a Node.js sandbox for the current directory
-claude-sandbox -Environment base
+cd D:\dev\my-dotnet-solution
 
-# Launch a PHP sandbox for a specific project
-claude-sandbox -Environment php -WorkDir D:\projects\my-php-app
+# Build a .NET sandbox with a custom SSH port
+claude-sandbox -Environment dotnet
 
-# Rebuild a .NET sandbox with a custom SSH port
-claude-sandbox -Environment dotnet -WorkDir . -SshPort 2345 -Rebuild
-
-# Restart a running sandbox
-claude-sandbox -Environment base -Restart
+# Import SSH keys from ~/.ssh
+claude-sandbox -CopySshKeys
 
 # SSH into a running sandbox
 claude-sandbox -Connect
@@ -109,8 +105,8 @@ claude-sandbox -Connect
 # Open Windows Firewall for remote access (requests elevation)
 claude-sandbox -Environment dotnet -AddFirewallRule
 
-# Import SSH keys from ~/.ssh
-claude-sandbox -CopySshKeys
+# Restart a running sandbox
+claude-sandbox -Restart
 ```
 
 If you've previously launched a sandbox for a directory and there is only one environment associated with it, you can omit `-Environment` and it will be inferred automatically:
@@ -416,7 +412,7 @@ The sandbox waits for sshd to be ready before returning, but if it times out:
 Verify that `~\.claude-sandbox\authorized_keys` exists and contains your public key. You can re-import keys from `~/.ssh` at any time:
 
 ```powershell
-claude-sandbox -Environment base -CopySshKeys
+claude-sandbox -CopySshKeys
 ```
 
 ### Proxy blocking required traffic
