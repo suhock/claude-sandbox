@@ -168,6 +168,8 @@ REFRESH_INTERVAL=2
 MENU_STATE=""
 
 trap 'REDRAW=1' WINCH
+stty -echo
+trap 'stty echo' EXIT
 
 while true; do
     now=$(date +%s)
@@ -184,29 +186,37 @@ while true; do
 
     read -rsn1 -t 0.25 choice || continue
     [ -z "$choice" ] && continue
-    choice=$(echo "$choice" | tr '[:lower:]' '[:upper:]')
-    printf "%s" "$choice"
-
-    if [ "$choice" = "Q" ]; then
-        echo ""
+    # Flush remaining bytes of escape sequences (e.g. arrow keys)
+    if [[ "$choice" == $'\033' ]]; then
+        read -rsn2 -t 0.01 _ || true
+        continue
+    fi
+    if [ "$choice" = "Q" ] || [ "$choice" = "q" ]; then
+        stty echo
+        printf "%s\n" "$choice"
         break
     fi
 
-    if [[ "$choice" =~ ^[0-9]$ ]]; then
-        idx=$(( (choice + 9) % 10 ))
-        if [ $idx -lt ${#sandbox_names[@]} ]; then
-            if [ "${sandbox_running[$idx]}" -eq 1 ]; then
-                printf "\n\n  ${C_TERTIARY}Connecting...${C_RESET}"
-                connect_to_sandbox "${sandbox_ports[$idx]}"
-            else
-                # Start stopped sandbox
-                printf "\n\n  ${C_TERTIARY}Starting...${C_RESET}"
-                port=$(start_sandbox "${sandbox_names[$idx]}")
-                if [ -n "$port" ]; then
-                    connect_to_sandbox "$port"
-                fi
+    # Ignore anything that isn't a valid menu key
+    if [[ ! "$choice" =~ ^[0-9]$ ]]; then
+        continue
+    fi
+
+    idx=$(( (choice + 9) % 10 ))
+    if [ $idx -lt ${#sandbox_names[@]} ]; then
+        stty echo
+        if [ "${sandbox_running[$idx]}" -eq 1 ]; then
+            printf "\n\n  ${C_TERTIARY}Connecting...${C_RESET}"
+            connect_to_sandbox "${sandbox_ports[$idx]}"
+        else
+            # Start stopped sandbox
+            printf "\n\n  ${C_TERTIARY}Starting...${C_RESET}"
+            port=$(start_sandbox "${sandbox_names[$idx]}")
+            if [ -n "$port" ]; then
+                connect_to_sandbox "$port"
             fi
         fi
-        REDRAW=1
+        stty -echo
     fi
+    REDRAW=1
 done
