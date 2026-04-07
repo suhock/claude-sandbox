@@ -145,13 +145,13 @@ show_menu() {
     echo_line "  ${C_PRIMARY}Q${C_RESET}  Quit"
     echo_line ""
 
-    printf "  ${C_SECONDARY}>${C_RESET} \033[J\033[?25h"
+    printf "  ${C_TERTIARY}>${C_RESET} \033[J\033[?25h"
 }
 
 connect_to_sandbox() {
     local port=$1
-    ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -q \
-        -p "$port" claude@host.docker.internal
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o ConnectTimeout=3 -p "$port" claude@host.docker.internal
 }
 
 # Main loop
@@ -159,14 +159,19 @@ clear
 REDRAW=1
 LAST_DRAW=0
 REFRESH_INTERVAL=2
+MENU_STATE=""
 
 trap 'REDRAW=1' WINCH
 
 while true; do
     now=$(date +%s)
     if [ $REDRAW -eq 1 ] || [ $(( now - LAST_DRAW )) -ge $REFRESH_INTERVAL ]; then
+        prev_state="$MENU_STATE"
         discover_sandboxes
-        show_menu
+        MENU_STATE=$(printf '%s\n' "${sandbox_names[@]}" "${sandbox_running[@]}")
+        if [ $REDRAW -eq 1 ] || [ "$MENU_STATE" != "$prev_state" ]; then
+            show_menu
+        fi
         REDRAW=0
         LAST_DRAW=$now
     fi
@@ -174,6 +179,7 @@ while true; do
     read -rsn1 -t 0.25 choice || continue
     [ -z "$choice" ] && continue
     choice=$(echo "$choice" | tr '[:lower:]' '[:upper:]')
+    printf "%s" "$choice"
 
     if [ "$choice" = "Q" ]; then
         echo ""
@@ -184,10 +190,11 @@ while true; do
         idx=$(( (choice + 9) % 10 ))
         if [ $idx -lt ${#sandbox_names[@]} ]; then
             if [ "${sandbox_running[$idx]}" -eq 1 ]; then
+                printf "\n\n  ${C_TERTIARY}Connecting...${C_RESET}"
                 connect_to_sandbox "${sandbox_ports[$idx]}"
             else
                 # Start stopped sandbox
-                printf "\033[J  ${C_SECONDARY}Starting...${C_RESET}"
+                printf "\n\n  ${C_TERTIARY}Starting...${C_RESET}"
                 port=$(start_sandbox "${sandbox_names[$idx]}")
                 if [ -n "$port" ]; then
                     connect_to_sandbox "$port"
