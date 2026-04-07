@@ -235,6 +235,12 @@ function Invoke-CopySshKeys {
         return 1
     }
 
+    # Preserve the picker's key if it exists in the current file
+    if (Test-Path $AuthorizedKeysFile) {
+        $pickerKeys = Get-Content $AuthorizedKeysFile | Where-Object { $_ -match 'claude-sandbox-picker$' }
+        if ($pickerKeys) { $keys += $pickerKeys }
+    }
+
     # Write the extracted keys to the sandbox authorized_keys file
     $keys | Sort-Object -Unique | Set-Content -Path $AuthorizedKeysFile
 
