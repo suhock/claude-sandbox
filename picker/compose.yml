@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      - HOST_HOSTNAME=${HOST_HOSTNAME}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${SANDBOX_AUTHORIZED_KEYS}:/host-ssh-keys/authorized_keys

@@ -283,6 +283,7 @@ function Ensure-Picker {
     }
 
     $env:SANDBOX_AUTHORIZED_KEYS = $AuthorizedKeysFile
+    $env:HOST_HOSTNAME = (hostname)
 
     $Port = $env:PICKER_SSH_PORT
     if (-not $Port) { $Port = 22000 }

@@ -2,6 +2,7 @@
 # Interactive sandbox picker — discovers running/stopped sandboxes, starts and connects
 
 export LANG=C.utf8
+[ -f ~/.sandbox_env ] && . ~/.sandbox_env
 
 # Color palette
 C_RESET='\033[0m'
@@ -117,9 +118,11 @@ show_menu() {
 
     echo_line ""
     echo_line "${C_PRIMARY} ▖▖▖ ▟▙ ▗▗▗ ${C_RESET}"
-    echo_line "${C_PRIMARY} ██▙▟▛▜▙▟██ ${C_RESET}  ${C_BOLD}Claude Sandbox${C_RESET}"
-    printf "${C_TERTIARY}…${C_PRIMARY}████  ████${C_TERTIARY}"
-    printf '…%.0s' $(seq 1 $(( $(tput cols) - 11 )))
+    echo_line "${C_PRIMARY} ██▙▟▛▜▙▟██ ${C_RESET} ${C_BOLD}Claude Sandbox${C_RESET}"
+    local host="${HOST_HOSTNAME:-$(hostname)}"
+    printf "${C_TERTIARY}…${C_PRIMARY}████  ████${C_TERTIARY}… %s " "$host"
+    local fill=$(( $(tput cols) - 14 - ${#host} ))
+    [ $fill -gt 0 ] && printf '…%.0s' $(seq 1 $fill)
     printf "${C_RESET}\n"
     echo_line ""
 
@@ -154,8 +157,11 @@ connect_to_sandbox() {
         -o ConnectTimeout=3 -p "$port" claude@host.docker.internal
 }
 
-# Main loop
+# Set the terminal title
+printf '\033]0;Claude Sandbox · %s\007' "${HOST_HOSTNAME:-$(hostname)}"
 clear
+
+# Main loop
 REDRAW=1
 LAST_DRAW=0
 REFRESH_INTERVAL=2
