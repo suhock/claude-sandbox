@@ -8,6 +8,7 @@ networks:
 
 services:
   proxy:
+    init: true
     build:
       context: ${SANDBOX_ROOT:-.}
       dockerfile: proxy/Dockerfile
@@ -27,7 +28,7 @@ services:
     sysctls:
       - net.ipv4.ip_forward=1
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "22"]
+      test: ["CMD", "nc", "-z", "127.0.0.1", "53"]
       interval: 2s
       timeout: 5s
       retries: 10

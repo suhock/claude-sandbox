@@ -18,6 +18,7 @@ done
 
 # --- DNS ---
 dnsmasq -k -C /etc/dnsmasq.conf &
+DNSMASQ_PID=$!
 
 # --- iptables ---
 # Create ipset for allowed destination IPs (populated dynamically by dnsmasq)
@@ -40,4 +41,22 @@ iptables -A FORWARD -p tcp -j REJECT --reject-with tcp-reset
 iptables -A FORWARD -j REJECT --reject-with icmp-port-unreachable
 
 # --- SSH forwarding ---
-exec socat TCP-LISTEN:22,fork TCP:claude:22
+# Wait for claude container's sshd to be reachable before accepting connections
+echo "Waiting for claude container SSH..."
+while ! nc -z claude 22 2>/dev/null; do
+  sleep 0.5
+done
+echo "Claude container SSH is ready"
+
+# Forward SSH with retry so connections during brief sshd restarts don't fail
+socat TCP-LISTEN:22,fork TCP:claude:22 &
+SOCAT_PID=$!
+
+# Supervise both critical processes — exit if either dies so Docker restarts us
+while kill -0 $DNSMASQ_PID 2>/dev/null && kill -0 $SOCAT_PID 2>/dev/null; do
+  sleep 2
+done
+echo "Critical process exited, shutting down" >&2
+kill $DNSMASQ_PID $SOCAT_PID 2>/dev/null
+wait
+exit 1

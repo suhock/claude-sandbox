@@ -30,12 +30,10 @@ echo "export SANDBOX_WORKSPACE=\"$SANDBOX_WORKSPACE\"" >> /home/claude/.sandbox_
 # Mark workspace as safe for git (bind mount has different ownership)
 git config --global --add safe.directory /workspace
 
-# Start sshd (needs root, use sudo)
-sudo /usr/sbin/sshd
-
-# Keep container alive
+# Start sshd in foreground — sshd manages its own children (reaps zombies)
+# and the container lifecycle is tied to sshd
 echo "============================================"
 echo " SSH in to manage tmux sessions"
 echo "============================================"
 
-exec sleep infinity
+exec sudo /usr/sbin/sshd -D -e

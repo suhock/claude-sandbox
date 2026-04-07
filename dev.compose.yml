@@ -1,4 +1,8 @@
 services:
+  proxy:
+    volumes:
+      - ${SANDBOX_ROOT:-.}/proxy/start.sh:/start.sh:ro
+      - ${SANDBOX_ROOT:-.}/proxy/allowed-domains.conf:/etc/proxy/allowed-domains.d/00-base.conf:ro
   claude:
     volumes:
       - ${SANDBOX_ROOT:-.}/shared/runtime/init.sh:/init.sh:ro
