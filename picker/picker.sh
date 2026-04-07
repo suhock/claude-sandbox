@@ -114,6 +114,9 @@ start_sandbox() {
 }
 
 show_menu() {
+    # Print the terminal title
+    printf '\033]0;🟨 %s\007' "${HOST_HOSTNAME:-$(hostname)}"
+    
     printf '\033[?25l\033[H'
 
     echo_line ""
@@ -157,8 +160,6 @@ connect_to_sandbox() {
         -o ConnectTimeout=3 -p "$port" claude@host.docker.internal
 }
 
-# Set the terminal title
-printf '\033]0;Claude Sandbox · %s\007' "${HOST_HOSTNAME:-$(hostname)}"
 clear
 
 # Main loop
