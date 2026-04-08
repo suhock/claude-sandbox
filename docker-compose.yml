@@ -54,7 +54,7 @@ services:
       - TERM=xterm-256color
     volumes:
       - ${DEV_DIR:-/dev/null}:/workspace
-      - ${CLAUDE_STATE_DIR:-/dev/null}:/home/claude/.claude
+      - ${CLAUDE_STATE_DIR:-/dev/null}/.claude:/home/claude/.claude
       - ${CLAUDE_STATE_DIR:-/dev/null}/.claude.json:/home/claude/.claude.json
       - ${HOST_PLUGINS_DIR:-/dev/null}:/host-plugins:ro
       - ${SANDBOX_AUTHORIZED_KEYS}:/host-ssh-keys/authorized_keys:ro

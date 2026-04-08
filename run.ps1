@@ -116,7 +116,7 @@ function Get-InstanceName([string]$Env) {
         )
     ).Replace('-', '').Substring(0, 8).ToLower()
 
-    "claude-$WorkDirName-$Env-$hash"
+    "$WorkDirName-$Env-$hash"
 }
 
 function Find-AvailablePort {
@@ -132,11 +132,11 @@ function Find-AvailablePort {
 
 function Get-SshPort([string]$InstanceName) {
     if ($SshPort -ne 0) { return $SshPort }
-    $PortsFile = Join-Path $SandboxDir "ports.json"
-    if (Test-Path $PortsFile) {
-        $hash = Get-Content $PortsFile -Raw | ConvertFrom-Json -AsHashtable
-        if ($hash -and $hash.ContainsKey($InstanceName)) {
-            return [int]$hash[$InstanceName]
+    $ConfigFile = Join-Path $SandboxDir $InstanceName ".claude-sandbox.json"
+    if (Test-Path $ConfigFile) {
+        $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json -AsHashtable
+        if ($config -and $config.ContainsKey("port")) {
+            return [int]$config["port"]
         }
     }
     return 0
@@ -379,20 +379,24 @@ function Initialize-ComposeEnvironment([string]$InstanceName) {
     if (-not (Test-Path $env:CLAUDE_STATE_DIR)) {
         New-Item -ItemType Directory -Force -Path $env:CLAUDE_STATE_DIR | Out-Null
     }
+    $ClaudeDir = Join-Path $env:CLAUDE_STATE_DIR ".claude"
+    if (-not (Test-Path $ClaudeDir)) {
+        New-Item -ItemType Directory -Force -Path $ClaudeDir | Out-Null
+    }
 
     # Resolve or allocate SSH port
     $Port = Get-SshPort $InstanceName
     if ($Port -eq 0) {
         $Port = Find-AvailablePort
     }
-    $PortsFile = Join-Path $SandboxDir "ports.json"
-    $hash = @{}
-    if (Test-Path $PortsFile) {
-        $parsed = Get-Content $PortsFile -Raw | ConvertFrom-Json -AsHashtable
-        if ($parsed) { $hash = $parsed }
+    $ConfigFile = Join-Path $env:CLAUDE_STATE_DIR ".claude-sandbox.json"
+    $config = @{}
+    if (Test-Path $ConfigFile) {
+        $parsed = Get-Content $ConfigFile -Raw | ConvertFrom-Json -AsHashtable
+        if ($parsed) { $config = $parsed }
     }
-    $hash[$InstanceName] = $Port
-    $hash | ConvertTo-Json | Set-Content $PortsFile
+    $config["port"] = $Port
+    $config | ConvertTo-Json | Set-Content $ConfigFile
 
     $env:COMPOSE_PROJECT_NAME = $InstanceName
     $env:SANDBOX_ROOT = $PSScriptRoot
@@ -458,8 +462,10 @@ function Initialize-StateDirectory {
         Set-Content -Path $ClaudeJson -Value "{}"
     }
 
-    # Fix ownership of state directory so container's claude user (UID 1000) can read/write
-    docker run --rm -v "${env:CLAUDE_STATE_DIR}:/state" alpine chown -R 1000:1000 /state
+    # Fix ownership so container's claude user (UID 1000) can read/write
+    $ClaudeDir = Join-Path $env:CLAUDE_STATE_DIR ".claude"
+    docker run --rm -v "${ClaudeDir}:/state" alpine chown -R 1000:1000 /state
+    docker run --rm -v "${ClaudeJson}:/state/.claude.json" alpine chown 1000:1000 /state/.claude.json
 
     # Remove stale SSH host key for this port
     ssh-keygen -R "[localhost]:$($env:CLAUDE_SSH_PORT)" 2>$null

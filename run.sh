@@ -61,7 +61,7 @@ get_instance_name() {
     workdir_name="$(basename "$normalized")"
     local hash
     hash="$(echo -n "${normalized}:${env_name}" | sha256sum | cut -c1-8)"
-    echo "claude-${workdir_name}-${env_name}-${hash}"
+    echo "${workdir_name}-${env_name}-${hash}"
 }
 
 find_available_port() {
@@ -83,10 +83,10 @@ get_ssh_port() {
         echo "$SSH_PORT"
         return
     fi
-    local ports_file="$SANDBOX_DIR/ports.json"
-    if [ -f "$ports_file" ]; then
+    local config_file="$SANDBOX_DIR/$instance_name/.claude-sandbox.json"
+    if [ -f "$config_file" ]; then
         local port
-        port="$(jq -r --arg k "$instance_name" '.[$k] // empty' "$ports_file")"
+        port="$(jq -r '.port // empty' "$config_file")"
         if [ -n "$port" ]; then
             echo "$port"
             return
@@ -255,7 +255,7 @@ init_compose_env() {
 
     # Per-instance state directory
     export CLAUDE_STATE_DIR="$SANDBOX_DIR/$instance_name"
-    mkdir -p "$CLAUDE_STATE_DIR"
+    mkdir -p "$CLAUDE_STATE_DIR/.claude"
 
     # Resolve or allocate SSH port
     local port
@@ -263,10 +263,13 @@ init_compose_env() {
     if [ "$port" -eq 0 ]; then
         port="$(find_available_port)"
     fi
-    local ports_file="$SANDBOX_DIR/ports.json"
-    [ ! -f "$ports_file" ] && echo '{}' > "$ports_file"
-    jq --arg k "$instance_name" --argjson v "$port" '.[$k] = $v' "$ports_file" > "$ports_file.tmp"
-    mv "$ports_file.tmp" "$ports_file"
+    local config_file="$CLAUDE_STATE_DIR/.claude-sandbox.json"
+    if [ -f "$config_file" ]; then
+        jq --argjson v "$port" '.port = $v' "$config_file" > "$config_file.tmp"
+        mv "$config_file.tmp" "$config_file"
+    else
+        echo "{\"port\": $port}" > "$config_file"
+    fi
 
     export COMPOSE_PROJECT_NAME="$instance_name"
     export SANDBOX_ROOT="$SCRIPT_DIR"
@@ -308,7 +311,8 @@ init_state_dir() {
     fi
 
     # Fix ownership so container's claude user (UID 1000) can read/write
-    docker run --rm -v "$CLAUDE_STATE_DIR:/state" alpine chown -R 1000:1000 /state
+    docker run --rm -v "$CLAUDE_STATE_DIR/.claude:/state" alpine chown -R 1000:1000 /state
+    docker run --rm -v "$claude_json:/state/.claude.json" alpine chown 1000:1000 /state/.claude.json
 
     # Remove stale SSH host key for this port
     ssh-keygen -R "[localhost]:$CLAUDE_SSH_PORT" 2>/dev/null || true
