@@ -119,10 +119,27 @@ function Get-InstanceName([string]$Env) {
     "claude-$WorkDirName-$Env-$hash"
 }
 
+function Find-AvailablePort {
+    $UsedPorts = @(netstat -an | Select-String 'LISTENING' | ForEach-Object {
+        if ($_ -match ':(\d+)\s') { [int]$Matches[1] }
+    })
+    for ($p = 22001; $p -le 22999; $p++) {
+        if ($p -notin $UsedPorts) { return $p }
+    }
+    Write-Error "No available port in range 22001-22999"
+    exit 1
+}
+
 function Get-SshPort([string]$InstanceName) {
     if ($SshPort -ne 0) { return $SshPort }
-    $PortHash = $InstanceName.Substring($InstanceName.LastIndexOf('-') + 1)
-    22001 + [Convert]::ToInt32($PortHash.Substring(0, 4), 16) % 999
+    $PortsFile = Join-Path $SandboxDir "ports.json"
+    if (Test-Path $PortsFile) {
+        $hash = Get-Content $PortsFile -Raw | ConvertFrom-Json -AsHashtable
+        if ($hash -and $hash.ContainsKey($InstanceName)) {
+            return [int]$hash[$InstanceName]
+        }
+    }
+    return 0
 }
 
 function Resolve-Environment {
@@ -155,6 +172,10 @@ function Invoke-AddFirewallRule {
 
     $name = Get-InstanceName $Environment
     $port = Get-SshPort $name
+    if ($port -eq 0) {
+        Write-Error "No sandbox found for this environment. Start one first."
+        return 1
+    }
     $PickerPort = $env:PICKER_SSH_PORT
     if (-not $PickerPort) { $PickerPort = 22000 }
 
@@ -262,6 +283,10 @@ function Invoke-CopySshKeys {
 function Invoke-Connect {
     $InstanceName = Get-InstanceName $Environment
     $Port = Get-SshPort $InstanceName
+    if ($Port -eq 0) {
+        Write-Error "No sandbox found for this environment. Start one first."
+        exit 1
+    }
     ssh -o StrictHostKeyChecking=no -p $Port claude@localhost
 }
 
@@ -337,19 +362,38 @@ function Test-SandboxRunning([string[]]$ComposeArgs) {
 
 function Get-ComposeContext {
     $InstanceName = Get-InstanceName $Environment
-    $Port = Get-SshPort $InstanceName
     $ComposeArgs = @("-f", (Join-Path $PSScriptRoot "docker-compose.yml"), "-f", (Join-Path $PSScriptRoot "environments" $Environment "compose.yml"))
 
     if ($SandboxDev) {
         $ComposeArgs += @("-f", (Join-Path $PSScriptRoot "dev.compose.yml"))
     }
 
-    Initialize-ComposeEnvironment $InstanceName $Port
+    $Port = Initialize-ComposeEnvironment $InstanceName
 
     @{ InstanceName = $InstanceName; Port = $Port; ComposeArgs = $ComposeArgs }
 }
 
-function Initialize-ComposeEnvironment([string]$InstanceName, [int]$Port) {
+function Initialize-ComposeEnvironment([string]$InstanceName) {
+    # Per-instance state directory
+    $env:CLAUDE_STATE_DIR = Join-Path $SandboxDir $InstanceName
+    if (-not (Test-Path $env:CLAUDE_STATE_DIR)) {
+        New-Item -ItemType Directory -Force -Path $env:CLAUDE_STATE_DIR | Out-Null
+    }
+
+    # Resolve or allocate SSH port
+    $Port = Get-SshPort $InstanceName
+    if ($Port -eq 0) {
+        $Port = Find-AvailablePort
+    }
+    $PortsFile = Join-Path $SandboxDir "ports.json"
+    $hash = @{}
+    if (Test-Path $PortsFile) {
+        $parsed = Get-Content $PortsFile -Raw | ConvertFrom-Json -AsHashtable
+        if ($parsed) { $hash = $parsed }
+    }
+    $hash[$InstanceName] = $Port
+    $hash | ConvertTo-Json | Set-Content $PortsFile
+
     $env:COMPOSE_PROJECT_NAME = $InstanceName
     $env:SANDBOX_ROOT = $PSScriptRoot
     $env:SANDBOX_ENV = $Environment
@@ -359,12 +403,6 @@ function Initialize-ComposeEnvironment([string]$InstanceName, [int]$Port) {
     $env:CLAUDE_SSH_PORT = $Port
 
     $env:HOST_PLUGINS_DIR = Join-Path (Join-Path $env:USERPROFILE ".claude") "plugins"
-
-    # Per-instance state directory
-    $env:CLAUDE_STATE_DIR = Join-Path $SandboxDir $InstanceName
-    if (-not (Test-Path $env:CLAUDE_STATE_DIR)) {
-        New-Item -ItemType Directory -Force -Path $env:CLAUDE_STATE_DIR | Out-Null
-    }
 
     # SSH authorized keys file — shared across all instances, user-managed
     # Ensure the file exists so Docker mounts a file, not /dev/null
@@ -377,6 +415,8 @@ function Initialize-ComposeEnvironment([string]$InstanceName, [int]$Port) {
     if (-not (Test-Path $env:SANDBOX_AUTHORIZED_KEYS)) {
         New-Item -ItemType File -Force -Path $env:SANDBOX_AUTHORIZED_KEYS | Out-Null
     }
+
+    return $Port
 }
 
 function Invoke-SandboxBuild([hashtable]$ctx) {

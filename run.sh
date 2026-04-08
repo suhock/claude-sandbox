@@ -3,6 +3,8 @@ set -euo pipefail
 
 # --- Configuration ---
 
+command -v jq >/dev/null 2>&1 || { echo "jq is required. Install it with: sudo apt install jq" >&2; exit 1; }
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SANDBOX_DIR="$HOME/.claude-sandbox"
 mkdir -p "$SANDBOX_DIR"
@@ -62,15 +64,35 @@ get_instance_name() {
     echo "claude-${workdir_name}-${env_name}-${hash}"
 }
 
+find_available_port() {
+    local used
+    used="$(ss -tlnH 2>/dev/null | awk '{print $4}' | grep -oE '[0-9]+$')"
+    for p in $(seq 22001 22999); do
+        if ! echo "$used" | grep -qx "$p"; then
+            echo "$p"
+            return
+        fi
+    done
+    echo "No available port in range 22001-22999" >&2
+    exit 1
+}
+
 get_ssh_port() {
     local instance_name="$1"
     if [ "$SSH_PORT" -ne 0 ]; then
         echo "$SSH_PORT"
         return
     fi
-    local port_hash="${instance_name##*-}"
-    local hex4="${port_hash:0:4}"
-    echo $(( 22001 + 16#$hex4 % 999 ))
+    local ports_file="$SANDBOX_DIR/ports.json"
+    if [ -f "$ports_file" ]; then
+        local port
+        port="$(jq -r --arg k "$instance_name" '.[$k] // empty' "$ports_file")"
+        if [ -n "$port" ]; then
+            echo "$port"
+            return
+        fi
+    fi
+    echo 0
 }
 
 resolve_environment() {
@@ -184,6 +206,10 @@ do_connect() {
     instance_name="$(get_instance_name "$ENVIRONMENT")"
     local port
     port="$(get_ssh_port "$instance_name")"
+    if [ "$port" -eq 0 ]; then
+        echo "No sandbox found for this environment. Start one first." >&2
+        exit 1
+    fi
     ssh -o StrictHostKeyChecking=no -p "$port" claude@localhost
 }
 
@@ -226,7 +252,21 @@ test_sandbox_running() {
 
 init_compose_env() {
     local instance_name="$1"
-    local port="$2"
+
+    # Per-instance state directory
+    export CLAUDE_STATE_DIR="$SANDBOX_DIR/$instance_name"
+    mkdir -p "$CLAUDE_STATE_DIR"
+
+    # Resolve or allocate SSH port
+    local port
+    port="$(get_ssh_port "$instance_name")"
+    if [ "$port" -eq 0 ]; then
+        port="$(find_available_port)"
+    fi
+    local ports_file="$SANDBOX_DIR/ports.json"
+    [ ! -f "$ports_file" ] && echo '{}' > "$ports_file"
+    jq --arg k "$instance_name" --argjson v "$port" '.[$k] = $v' "$ports_file" > "$ports_file.tmp"
+    mv "$ports_file.tmp" "$ports_file"
 
     export COMPOSE_PROJECT_NAME="$instance_name"
     export SANDBOX_ROOT="$SCRIPT_DIR"
@@ -238,10 +278,6 @@ init_compose_env() {
 
     export HOST_PLUGINS_DIR="$HOME/.claude/plugins"
 
-    # Per-instance state directory
-    export CLAUDE_STATE_DIR="$SANDBOX_DIR/$instance_name"
-    mkdir -p "$CLAUDE_STATE_DIR"
-
     # SSH authorized keys file
     export SANDBOX_AUTHORIZED_KEYS="$AUTHORIZED_KEYS_FILE"
 
@@ -252,6 +288,8 @@ init_compose_env() {
     if [ ! -f "$SANDBOX_AUTHORIZED_KEYS" ]; then
         touch "$SANDBOX_AUTHORIZED_KEYS"
     fi
+
+    ALLOCATED_PORT="$port"
 }
 
 get_compose_args() {
@@ -390,38 +428,37 @@ fi
 # --- Actions ---
 
 instance_name="$(get_instance_name "$ENVIRONMENT")"
-port="$(get_ssh_port "$instance_name")"
 
 case "$ACTION" in
     connect)
         do_connect
         ;;
     restart)
-        init_compose_env "$instance_name" "$port"
+        init_compose_env "$instance_name"
         read -ra compose_args <<< "$(get_compose_args)"
         if test_sandbox_running "${compose_args[@]}"; then
             docker compose "${compose_args[@]}" down
         fi
-        sandbox_up "$port" "$instance_name"
+        sandbox_up "$ALLOCATED_PORT" "$instance_name"
         ;;
     rebuild)
-        init_compose_env "$instance_name" "$port"
+        init_compose_env "$instance_name"
         read -ra compose_args <<< "$(get_compose_args)"
         if test_sandbox_running "${compose_args[@]}"; then
             docker compose "${compose_args[@]}" down
         fi
         stop_picker
         sandbox_build
-        sandbox_up "$port" "$instance_name"
+        sandbox_up "$ALLOCATED_PORT" "$instance_name"
         ;;
     start|*)
-        init_compose_env "$instance_name" "$port"
+        init_compose_env "$instance_name"
         read -ra compose_args <<< "$(get_compose_args)"
         if test_sandbox_running "${compose_args[@]}"; then
-            show_connection_info "$instance_name" "$port"
+            show_connection_info "$instance_name" "$ALLOCATED_PORT"
         else
             sandbox_build
-            sandbox_up "$port" "$instance_name"
+            sandbox_up "$ALLOCATED_PORT" "$instance_name"
         fi
         ;;
 esac
