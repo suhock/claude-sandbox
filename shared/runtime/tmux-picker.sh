@@ -10,7 +10,6 @@ workspace="${SANDBOX_WORKSPACE:-workspace}"
 if ! tmux -f "$TMUX_CONF" has-session -t "$SESSION" 2>/dev/null; then
     tmux -f "$TMUX_CONF" new-session -d -s "$SESSION" \
         -n claude 'claude --dangerously-skip-permissions' \; \
-        set-option status-style "bg=colour174,fg=black" \; \
         set-option status-left " ${workspace} · ${SANDBOX_ENV:-unknown} · "
 fi
 
