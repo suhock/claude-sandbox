@@ -1,6 +1,6 @@
 # Claude Sandbox
 
-A Docker-based development environment for Windows that provides isolated, SSH-accessible workspaces for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Each sandbox runs in its own container with a restrictive network proxy that only allows traffic to Anthropic services, keeping your development environment secure by default.
+A Docker-based development environment for Windows that provides isolated, SSH-accessible workspaces for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Each sandbox runs in its own container with a restrictive network gateway that only allows traffic to Anthropic services and explicitly whitelisted services, keeping your development environment secure by default.
 
 > **NOTE:** These instances should not be directly exposed to the public internet. See [Remote Access](#remote-access) for connecting from other devices.
 
@@ -13,20 +13,20 @@ A Docker-based development environment for Windows that provides isolated, SSH-a
                                    SSH │
                                        ▼
   SSH (port 22001-22999)  ┌────────────────────────────┐
-  ──────────────────────► │  Proxy/Gateway             │
-                          │  iptables + DNSmasq        │
-                          └───┬────────────────────┬───┘
-                          SSH │              HTTPS │
-                              ▼                    ▼
-                          ┌───────────────┐    Anthropic
-                          │  Claude Code  │    services only
-                          │  tmux         │
-                          └───────────────┘
+  ──────────────────────► │  Gateway                   │
+                          │  (iptables + DNSmasq)      │
+                          └───┬─────────────────────┬──┘
+                          SSH │         ▲     HTTPS │
+                              ▼   HTTPS │           ▼
+                          ┌─────────────┴──┐    Whitelisted
+                          │  Claude Code   │    services only
+                          │  tmux          │
+                          └────────────────┘
 ```
 
 Three containers are involved:
 
-- **Proxy** -- iptables-based transparent proxy + DNSmasq DNS server. All outbound traffic from the sandbox is routed through this proxy, which only allows HTTPS connections to Anthropic-owned domains by default.
+- **Gateway** -- iptables-based network gateway + DNSmasq DNS server. All outbound traffic from the sandbox is routed through this gateway, which only allows HTTPS connections to Anthropic-owned domains by default.
 - **Claude** -- The development container. Runs SSH, tmux, and Claude Code. Your project directory is bind-mounted at `/workspace`.
 - **Picker** -- A lightweight management container that discovers all running and stopped sandboxes via the Docker socket. Provides a single SSH entry point (port 22000) with an interactive menu for selecting and connecting to sandboxes. Started automatically alongside any sandbox.
 
@@ -316,9 +316,9 @@ claude-sandbox -Environment base
 
 ## Network security
 
-The proxy container acts as a transparent gateway — all traffic from the sandbox is routed through it via iptables. Only connections to allowed domains are forwarded; everything else is dropped.
+The gateway container routes all traffic from the sandbox through iptables. Only connections to allowed domains are forwarded; everything else is dropped.
 
-Base allowed domains are defined in `proxy/allowed-domains.conf`. To allow additional domains for a specific environment, create an `allowed-domains.conf` in the environment's folder and mount it in `compose.yml`:
+Base allowed domains are defined in `gateway/allowed-domains.conf`. To allow additional domains for a specific environment, create an `allowed-domains.conf` in the environment's folder and mount it in `compose.yml`:
 
 ```
 environments/dotnet/allowed-domains.conf:
@@ -328,12 +328,12 @@ environments/dotnet/allowed-domains.conf:
 
 ```yaml
 services:
-  proxy:
+  gateway:
     volumes:
-      - ${SANDBOX_ROOT}/environments/dotnet/allowed-domains.conf:/etc/proxy/allowed-domains.d/env.conf:ro
+      - ${SANDBOX_ROOT}/environments/dotnet/allowed-domains.conf:/etc/gateway/allowed-domains.d/env.conf:ro
 ```
 
-To allow additional domains globally, add them to `proxy/allowed-domains.conf`.
+To allow additional domains globally, add them to `gateway/allowed-domains.conf`.
 
 > **Warning:** Each domain you add expands the attack surface of the sandbox. An AI agent with network access could exfiltrate code, secrets, or conversation context to any allowed host. Only allow domains you trust and that the environment genuinely needs. Avoid broad wildcards or general-purpose hosts (e.g. `pastebin.com`, `github.com`) unless you fully understand the risk.
 
@@ -341,15 +341,15 @@ To allow additional domains globally, add them to `proxy/allowed-domains.conf`.
 
 ```
 claude-sandbox/
-├── docker-compose.yml        # Main orchestration (proxy + claude services)
+├── docker-compose.yml        # Main orchestration (gateway + claude services)
 ├── dev.compose.yml           # Dev overrides (bind-mounts runtime scripts)
 ├── run.ps1                   # Entry point for launching sandboxes
 ├── install.ps1               # CLI installation script
-├── proxy/
-│   ├── Dockerfile            # Alpine-based proxy image
+├── gateway/
+│   ├── Dockerfile            # Alpine-based gateway image
 │   ├── dnsmasq.conf          # DNS configuration
 │   ├── allowed-domains.conf  # Base domain allowlist
-│   └── start.sh              # Proxy container entry point
+│   └── start.sh              # Gateway container entry point
 ├── shared/
 │   ├── Dockerfile            # Base image for all sandbox environments
 │   ├── setup-root.sh         # Root-level setup (packages, sshd, user creation)
@@ -415,15 +415,15 @@ Verify that `~\.claude-sandbox\authorized_keys` exists and contains your public 
 claude-sandbox -CopySshKeys
 ```
 
-### Proxy blocking required traffic
+### Gateway blocking required traffic
 
-If Claude Code can't reach Anthropic services, check the proxy logs:
+If Claude Code can't reach Anthropic services, check the gateway logs:
 
 ```powershell
-docker compose -p <instance-name> logs proxy
+docker compose -p <instance-name> logs gateway
 ```
 
-To allow additional domains for a specific environment, add an `allowed-domains.conf` to the environment's folder and mount it in its `compose.yml`. To allow them globally, add them to `proxy/allowed-domains.conf`. Either way, rebuild with `-Rebuild`.
+To allow additional domains for a specific environment, add an `allowed-domains.conf` to the environment's folder and mount it in its `compose.yml`. To allow them globally, add them to `gateway/allowed-domains.conf`. Either way, rebuild with `-Rebuild`.
 
 ### Rebuilding from scratch
 

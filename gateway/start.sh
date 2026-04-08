@@ -3,13 +3,13 @@ set -e
 
 # --- Allowed domains ---
 # Copy environment-specific domains if present
-ENV_DOMAINS="/etc/proxy/environments/${SANDBOX_ENV}/allowed-domains.conf"
+ENV_DOMAINS="/etc/gateway/environments/${SANDBOX_ENV}/allowed-domains.conf"
 if [ -f "$ENV_DOMAINS" ]; then
-  cp "$ENV_DOMAINS" /etc/proxy/allowed-domains.d/env.conf
+  cp "$ENV_DOMAINS" /etc/gateway/allowed-domains.d/env.conf
 fi
 
 # Load all domain files (strip comments and blank lines)
-ALLOWED_DOMAINS=$(cat /etc/proxy/allowed-domains.d/*.conf 2>/dev/null | grep -v '^#' | grep -v '^$')
+ALLOWED_DOMAINS=$(cat /etc/gateway/allowed-domains.d/*.conf 2>/dev/null | grep -v '^#' | grep -v '^$')
 
 # --- dnsmasq: generate ipset directives for each allowed domain ---
 for domain in $ALLOWED_DOMAINS; do

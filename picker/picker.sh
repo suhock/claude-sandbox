@@ -81,21 +81,21 @@ start_sandbox() {
     local project=$(sudo docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$name" 2>/dev/null)
     [ -z "$project" ] && return 1
 
-    # Find all containers in this project and start them (proxy first)
+    # Find all containers in this project and start them (gateway first)
     local containers=$(sudo docker ps -a --filter "label=com.docker.compose.project=$project" --format '{{.Names}}\t{{.Label "com.docker.compose.service"}}' 2>/dev/null)
 
-    # Start proxy first
+    # Start gateway first
     echo "$containers" | while IFS=$'\t' read -r cname service; do
-        [ "$service" = "proxy" ] && sudo docker start "$cname" >/dev/null 2>&1
+        [ "$service" = "gateway" ] && sudo docker start "$cname" >/dev/null 2>&1
     done
 
     # Then start the rest
     echo "$containers" | while IFS=$'\t' read -r cname service; do
-        [ "$service" != "proxy" ] && sudo docker start "$cname" >/dev/null 2>&1
+        [ "$service" != "gateway" ] && sudo docker start "$cname" >/dev/null 2>&1
     done
 
     # Get the SSH port
-    local port=$(sudo docker port "${project}-proxy-1" 22 2>/dev/null | sed -n 's/.*:\([0-9]*\)/\1/p' | head -1)
+    local port=$(sudo docker port "${project}-gateway-1" 22 2>/dev/null | sed -n 's/.*:\([0-9]*\)/\1/p' | head -1)
     [ -z "$port" ] && return 1
 
     # Wait for SSH to become available

@@ -7,16 +7,16 @@ networks:
         - subnet: ${SUBNET}
 
 services:
-  proxy:
+  gateway:
     init: true
     build:
       context: ${SANDBOX_ROOT:-.}
-      dockerfile: proxy/Dockerfile
+      dockerfile: gateway/Dockerfile
     environment:
       - SANDBOX_ENV=${SANDBOX_ENV:-base}
     networks:
       claude-net:
-        ipv4_address: ${PROXY_IP}
+        ipv4_address: ${GATEWAY_IP}
       default:
     labels:
       - sandbox.env=${SANDBOX_ENV:-unknown}
@@ -42,7 +42,7 @@ services:
         BASE_IMAGE: ${BASE_IMAGE:-debian:bookworm-slim}
         ENV_NAME: ${ENV_NAME:-base}
     depends_on:
-      proxy:
+      gateway:
         condition: service_healthy
     networks:
       claude-net:
@@ -51,10 +51,10 @@ services:
     security_opt:
       - seccomp:unconfined
     dns:
-      - ${PROXY_IP}
+      - ${GATEWAY_IP}
     hostname: claude-sandbox
     environment:
-      - PROXY_IP=${PROXY_IP}
+      - GATEWAY_IP=${GATEWAY_IP}
       - SANDBOX_ENV=${SANDBOX_ENV:-unknown}
       - SANDBOX_WORKSPACE=${SANDBOX_WORKSPACE:-workspace}
       - DISABLE_AUTOUPDATER=1
