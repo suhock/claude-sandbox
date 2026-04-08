@@ -236,11 +236,6 @@ init_compose_env() {
     export HOME="$HOME"
     export CLAUDE_SSH_PORT="$port"
 
-    # Derive unique /28 subnet from port
-    local base=$(( port * 16 ))
-    export SUBNET="10.$(( (base / 65536) % 256 )).$(( (base / 256) % 256 )).$(( base % 256 ))/28"
-    local gateway_base=$(( base + 2 ))
-    export GATEWAY_IP="10.$(( (gateway_base / 65536) % 256 )).$(( (gateway_base / 256) % 256 )).$(( gateway_base % 256 ))"
     export HOST_PLUGINS_DIR="$HOME/.claude/plugins"
 
     # Per-instance state directory

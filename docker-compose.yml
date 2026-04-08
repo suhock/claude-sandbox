@@ -2,9 +2,6 @@ networks:
   claude-net:
     driver: bridge
     internal: false
-    ipam:
-      config:
-        - subnet: ${SUBNET}
 
 services:
   gateway:
@@ -16,7 +13,6 @@ services:
       - SANDBOX_ENV=${SANDBOX_ENV:-base}
     networks:
       claude-net:
-        ipv4_address: ${GATEWAY_IP}
       default:
     labels:
       - sandbox.env=${SANDBOX_ENV:-unknown}
@@ -50,11 +46,8 @@ services:
       - NET_ADMIN
     security_opt:
       - seccomp:unconfined
-    dns:
-      - ${GATEWAY_IP}
     hostname: claude-sandbox
     environment:
-      - GATEWAY_IP=${GATEWAY_IP}
       - SANDBOX_ENV=${SANDBOX_ENV:-unknown}
       - SANDBOX_WORKSPACE=${SANDBOX_WORKSPACE:-workspace}
       - DISABLE_AUTOUPDATER=1

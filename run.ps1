@@ -358,10 +358,6 @@ function Initialize-ComposeEnvironment([string]$InstanceName, [int]$Port) {
     $env:HOME = $env:USERPROFILE
     $env:CLAUDE_SSH_PORT = $Port
 
-    # Derive unique /28 subnet from port (port → 10.x.y.z/28, gateway at .2)
-    $base = $Port * 16
-    $env:SUBNET = "10.$([math]::Floor($base / 65536) % 256).$([math]::Floor($base / 256) % 256).$($base % 256)/28"
-    $env:GATEWAY_IP = "10.$([math]::Floor(($base + 2) / 65536) % 256).$([math]::Floor(($base + 2) / 256) % 256).$(($base + 2) % 256)"
     $env:HOST_PLUGINS_DIR = Join-Path (Join-Path $env:USERPROFILE ".claude") "plugins"
 
     # Per-instance state directory
