@@ -271,7 +271,7 @@ init_compose_env() {
         echo "{\"port\": $port}" > "$config_file"
     fi
 
-    export COMPOSE_PROJECT_NAME="$instance_name"
+    export COMPOSE_PROJECT_NAME="claude-$instance_name"
     export SANDBOX_ROOT="$SCRIPT_DIR"
     export SANDBOX_ENV="$ENVIRONMENT"
     export SANDBOX_WORKSPACE="$(basename "$WORKDIR")"

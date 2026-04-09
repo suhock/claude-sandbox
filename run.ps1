@@ -398,7 +398,7 @@ function Initialize-ComposeEnvironment([string]$InstanceName) {
     $config["port"] = $Port
     $config | ConvertTo-Json | Set-Content $ConfigFile
 
-    $env:COMPOSE_PROJECT_NAME = $InstanceName
+    $env:COMPOSE_PROJECT_NAME = "claude-$InstanceName"
     $env:SANDBOX_ROOT = $PSScriptRoot
     $env:SANDBOX_ENV = $Environment
     $env:SANDBOX_WORKSPACE = (Split-Path $WorkDir -Leaf)
