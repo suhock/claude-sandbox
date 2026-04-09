@@ -1,6 +1,14 @@
 # Claude Sandbox
 
-A Docker-based development environment for Windows that provides isolated, SSH-accessible workspaces for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Each sandbox runs in its own container with a restrictive network gateway that only allows traffic to Anthropic services and explicitly whitelisted services, keeping your development environment secure by default.
+A Docker-based development environment for Windows and Linux that provides isolated, SSH-accessible workspaces for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Each sandbox runs in its own container with a restrictive network gateway that only allows traffic to Anthropic services and explicitly whitelisted services, keeping your development environment secure by default.
+
+### Key Features
+
+- **Locked down file system** — Only your project directory is bind-mounted into the container. Claude can read and write files there but has no access to the rest of your host filesystem.
+- **Locked down networking** — All outbound traffic is routed through an iptables gateway with DNS-based filtering. Only Anthropic domains are allowed unless you explicitly whitelisted for a specific environment.
+- **Remote access** — Connect anywhere from your phone or other device. Uses tmux for session management, so reconnect and resume where you left off.
+- **Multiple environments** — Pre-built configurations for working with .NET, Node.js, and PHP. Add new ones with a minimal `compose.yml` and setup scripts.
+- **Sandbox picker** — A single SSH entry point that presents all available sandboxes.
 
 > **NOTE:** These instances should not be directly exposed to the public internet. See [Remote Access](#remote-access) for connecting from other devices.
 
@@ -249,6 +257,8 @@ Plugins are supported by syncing them from your host machine's Claude Code insta
 3. Windows paths in plugin metadata are translated to Linux paths automatically.
 
 No additional configuration is needed -- any plugins you have installed on the host will be available inside the sandbox.
+
+> **Why sync instead of install natively?** Most marketplace plugins are hosted on GitHub, which is blocked by the gateway's network rules by default. Copying pre-installed plugins from the host avoids the need to whitelist `github.com`.
 
 ## Environments
 

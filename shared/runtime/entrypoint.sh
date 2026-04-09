@@ -1,5 +1,9 @@
 #!/bin/bash
-# Sync host plugins into the writable state directory
+# Sync host plugins into the writable state directory.
+# Most marketplace plugins are hosted on github.com, which is blocked by the
+# gateway's network rules. Copying pre-installed plugins from the host avoids
+# the need to whitelist github.com. The metadata JSON files also need Windows-
+# to-Linux path translation since the host is Windows.
 if [ -d /host-plugins ]; then
     mkdir -p ~/.claude/plugins
     
