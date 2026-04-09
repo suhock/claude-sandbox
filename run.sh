@@ -31,6 +31,7 @@ while [ $# -gt 0 ]; do
         --rebuild)     ACTION="rebuild"; shift ;;
         --restart)     ACTION="restart"; shift ;;
         --connect)     ACTION="connect"; shift ;;
+        --picker)      ACTION="picker"; shift ;;
         --copy-ssh-keys) ACTION="copy-ssh-keys"; shift ;;
         --sandbox-dev) SANDBOX_DEV=true; shift ;;
         --environment) ENVIRONMENT="$2"; shift 2 ;;
@@ -126,6 +127,7 @@ show_usage() {
     echo "  claude-sandbox --rebuild --environment <name> [--workdir <path>]"
     echo "                 [--ssh-port <port>]"
     echo "  claude-sandbox --connect --environment <name>"
+    echo "  claude-sandbox --picker"
     echo "  claude-sandbox --copy-ssh-keys"
     echo ""
     echo "Environments: ${VALID_ENVIRONMENTS[*]}"
@@ -135,6 +137,7 @@ show_usage() {
     echo "  --restart          Stop and restart the container"
     echo "  --rebuild          Force rebuild the container image"
     echo "  --connect          SSH into the container"
+    echo "  --picker           SSH into the sandbox picker"
     echo "  --copy-ssh-keys    Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
     echo ""
     echo "Options:"
@@ -210,6 +213,11 @@ do_connect() {
         echo "No sandbox found for this environment. Start one first." >&2
         exit 1
     fi
+    ssh -o StrictHostKeyChecking=no -p "$port" claude@localhost
+}
+
+do_picker() {
+    local port="${PICKER_SSH_PORT:-22000}"
     ssh -o StrictHostKeyChecking=no -p "$port" claude@localhost
 }
 
@@ -392,14 +400,19 @@ show_ssh_warnings() {
 # --- Validation ---
 
 # Check exclusive flags
-if [ "$SANDBOX_DEV" = true ] && [[ "$ACTION" =~ ^(connect|copy-ssh-keys)$ ]]; then
+if [ "$SANDBOX_DEV" = true ] && [[ "$ACTION" =~ ^(connect|picker|copy-ssh-keys)$ ]]; then
     echo "--sandbox-dev can only be used with --start, --rebuild, or --restart" >&2
     exit 1
 fi
 
-# Handle copy-ssh-keys (no environment needed)
+# Handle actions that don't need an environment
 if [ "$ACTION" = "copy-ssh-keys" ]; then
     copy_ssh_keys
+    exit $?
+fi
+
+if [ "$ACTION" = "picker" ]; then
+    do_picker
     exit $?
 fi
 

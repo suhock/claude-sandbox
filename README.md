@@ -2,13 +2,20 @@
 
 A Docker-based development environment for Windows and Linux that provides isolated, SSH-accessible workspaces for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Each sandbox runs in its own container with a restrictive network gateway that only allows traffic to Anthropic services and explicitly whitelisted services, keeping your development environment secure by default.
 
-### Key Features
+## Key Features
 
-- **Locked down file system** — Only your project directory is bind-mounted into the container. Claude can read and write files there but has no access to the rest of your host filesystem.
-- **Locked down networking** — All outbound traffic is routed through an iptables gateway with DNS-based filtering. Only Anthropic domains are allowed unless you explicitly whitelisted for a specific environment.
-- **Remote access** — Connect anywhere from your phone or other device. Uses tmux for session management, so reconnect and resume where you left off.
-- **Multiple environments** — Pre-built configurations for working with .NET, Node.js, and PHP. Add new ones with a minimal `compose.yml` and setup scripts.
+### Security
+- **File system** — Only your project directory is bind-mounted into the container. Claude can read and write files there but has no access to the rest of your host filesystem.
+- **Networking** — All outbound traffic is routed through an iptables gateway with DNS-based filtering. Only Anthropic domains necessary for Claude Code and specifically specified domains whitelisted for the development environment are allowed.
+
+### Convenience
+- **Remote access** — Connect from anywhere with your phone or other device.
+- **Session management** - Uses tmux for session management, so reconnect and resume where you left off.
 - **Sandbox picker** — A single SSH entry point that presents all available sandboxes.
+
+### **Flexibility**
+- **Multiple environments** — Pre-built configurations for working with .NET, Node.js, and PHP. Add new ones with a minimal `compose.yml` and a couple setup scripts.
+
 
 > **NOTE:** These instances should not be directly exposed to the public internet. See [Remote Access](#remote-access) for connecting from other devices.
 
@@ -32,11 +39,12 @@ A Docker-based development environment for Windows and Linux that provides isola
                           └────────────────┘
 ```
 
-Three containers are involved:
+Each project has two containers:
 
 - **Gateway** -- iptables-based network gateway + DNSmasq DNS server. All outbound traffic from the sandbox is routed through this gateway, which only allows HTTPS connections to Anthropic-owned domains by default.
 - **Claude** -- The development container. Runs SSH, tmux, and Claude Code. Your project directory is bind-mounted at `/workspace`.
-- **Picker** -- A lightweight management container that discovers all running and stopped sandboxes via the Docker socket. Provides a single SSH entry point (port 22000) with an interactive menu for selecting and connecting to sandboxes. Started automatically alongside any sandbox.
+
+Additionally, there is a lightweight management container that discovers all running and stopped sandboxes via the Docker socket. It provides a single SSH entry point (port 22000) with an interactive menu for selecting and connecting to sandboxes. It's started automatically alongside any sandbox.
 
 ## Prerequisites
 
@@ -73,6 +81,7 @@ claude-sandbox [-Start] [-Environment <name>] [-WorkDir <path>] [-SshPort <port>
 claude-sandbox -Restart [-Environment <name>] [-SshPort <port>]
 claude-sandbox -Rebuild [-Environment <name>] [-WorkDir <path>] [-SshPort <port>]
 claude-sandbox -Connect [-Environment <name>]
+claude-sandbox -Picker
 claude-sandbox -CopySshKeys
 claude-sandbox -AddFirewallRule [-Environment <name>]
 ```
@@ -85,6 +94,7 @@ claude-sandbox -AddFirewallRule [-Environment <name>]
 | `-Restart`         | Stop and restart the container                        |
 | `-Rebuild`         | Force rebuild the container image                     |
 | `-Connect`         | SSH into the container                                |
+| `-Picker`          | SSH into the sandbox picker                           |
 | `-CopySshKeys`     | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
 | `-AddFirewallRule` | Open SSH ports (sandbox + picker) in Windows Firewall (requests elevation) |
 
@@ -96,43 +106,29 @@ claude-sandbox -AddFirewallRule [-Environment <name>]
 | `-WorkDir`       | Workspace directory (default: current directory)       |
 | `-SshPort`      | SSH port on the host (default: auto-assigned, range 22001-22999) |
 
+If you've previously launched a sandbox for a directory and there is only one environment associated with it, you can omit `-Environment` and it will be inferred automatically:
+
+If multiple environments have been used with the same directory, you'll be prompted to specify which one.
+
 Examples:
 
 ```powershell
 cd D:\dev\my-dotnet-solution
 
-# Build a .NET sandbox with a custom SSH port
+# Build a .NET sandbox
 claude-sandbox -Environment dotnet
 
-# Import SSH keys from ~/.ssh
+# Import public SSH keys from ~/.ssh
 claude-sandbox -CopySshKeys
 
-# SSH into a running sandbox
+# Connect to a running sandbox
 claude-sandbox -Connect
 
 # Open Windows Firewall for remote access (requests elevation)
-claude-sandbox -Environment dotnet -AddFirewallRule
+claude-sandbox -AddFirewallRule
 
 # Restart a running sandbox
 claude-sandbox -Restart
-```
-
-If you've previously launched a sandbox for a directory and there is only one environment associated with it, you can omit `-Environment` and it will be inferred automatically:
-
-```powershell
-# First launch requires -Environment
-claude-sandbox -Environment dotnet -WorkDir D:\projects\my-app
-
-# Subsequent launches infer the environment
-claude-sandbox -WorkDir D:\projects\my-app
-```
-
-If multiple environments have been used with the same directory, you'll be prompted to specify which one.
-
-You can also run directly from the repository root without installing:
-
-```powershell
-.\run.ps1 -Environment base -WorkDir D:\projects\myapp
 ```
 
 ### SSH authentication

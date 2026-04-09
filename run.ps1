@@ -8,6 +8,7 @@ param(
     [switch]$Restart,
     [switch]$CopySshKeys,
     [switch]$Connect,
+    [switch]$Picker,
     [switch]$AddFirewallRule,
     [switch]$SandboxDev
 )
@@ -30,19 +31,24 @@ $ValidEnvironments = Get-ChildItem -Directory (Join-Path $PSScriptRoot "environm
 # --- Functions ---
 
 function Main {
-    $ExclusiveFlags = @(@($Start, $Rebuild, $Restart, $Connect, $CopySshKeys, $AddFirewallRule) | Where-Object { $_ })
-    if ($SandboxDev -and ($Connect -or $CopySshKeys -or $AddFirewallRule)) {
+    $ExclusiveFlags = @(@($Start, $Rebuild, $Restart, $Connect, $Picker, $CopySshKeys, $AddFirewallRule) | Where-Object { $_ })
+    if ($SandboxDev -and ($Connect -or $Picker -or $CopySshKeys -or $AddFirewallRule)) {
         Write-Error "-SandboxDev can only be used with -Start, -Rebuild, or -Restart"
         exit 1
     }
 
     if ($ExclusiveFlags.Count -gt 1) {
-        Write-Error "Only one of -Start, -Rebuild, -Restart, -Connect, -CopySshKeys, -AddFirewallRule can be specified"
+        Write-Error "Only one of -Start, -Rebuild, -Restart, -Connect, -Picker, -CopySshKeys, -AddFirewallRule can be specified"
         exit 1
     }
 
     if ($CopySshKeys) {
         exit (Invoke-CopySshKeys)
+    }
+
+    if ($Picker) {
+        Invoke-Picker
+        return
     }
 
     if (-not $Environment) {
@@ -86,6 +92,7 @@ function Show-Usage {
     Write-Host "  claude-sandbox -Rebuild [-Environment <name>] [-WorkDir <path>]"
     Write-Host "                 [-SshPort <port>]"
     Write-Host "  claude-sandbox -Connect [-Environment <name>]"
+    Write-Host "  claude-sandbox -Picker"
     Write-Host "  claude-sandbox -CopySshKeys"
     Write-Host "  claude-sandbox -AddFirewallRule [-Environment <name>]"
     Write-Host ""
@@ -96,6 +103,7 @@ function Show-Usage {
     Write-Host "  -Restart          Stop and restart the container"
     Write-Host "  -Rebuild          Force rebuild the container image"
     Write-Host "  -Connect          SSH into the container"
+    Write-Host "  -Picker           SSH into the sandbox picker"
     Write-Host "  -CopySshKeys      Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
     Write-Host "  -AddFirewallRule  Open the SSH port in Windows Firewall (requests UAC)"
     Write-Host ""
@@ -287,6 +295,12 @@ function Invoke-Connect {
         Write-Error "No sandbox found for this environment. Start one first."
         exit 1
     }
+    ssh -o StrictHostKeyChecking=no -p $Port claude@localhost
+}
+
+function Invoke-Picker {
+    $Port = $env:PICKER_SSH_PORT
+    if (-not $Port) { $Port = 22000 }
     ssh -o StrictHostKeyChecking=no -p $Port claude@localhost
 }
 

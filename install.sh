@@ -40,7 +40,7 @@ _claude_sandbox() {
             COMPREPLY=($(compgen -d -- "$cur"))
             ;;
         *)
-            COMPREPLY=($(compgen -W "--start --rebuild --restart --connect --copy-ssh-keys --environment --workdir --ssh-port --sandbox-dev" -- "$cur"))
+            COMPREPLY=($(compgen -W "--start --rebuild --restart --connect --picker --copy-ssh-keys --environment --workdir --ssh-port --sandbox-dev" -- "$cur"))
             ;;
     esac
 }
