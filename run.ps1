@@ -271,7 +271,8 @@ function Invoke-CopySshKeys {
     }
 
     # Write the extracted keys to the sandbox authorized_keys file
-    $keys | Sort-Object -Unique | Set-Content -Path $AuthorizedKeysFile
+    $keys = $keys | Sort-Object -Unique
+    $keys | Set-Content -Path $AuthorizedKeysFile
 
     # Inform the user of the result
     Write-Host ""
