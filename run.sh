@@ -22,6 +22,7 @@ SSH_PORT=0
 ENVIRONMENT=""
 ACTION=""
 SANDBOX_DEV=false
+NO_CACHE=false
 
 # --- Argument parsing ---
 
@@ -34,6 +35,7 @@ while [ $# -gt 0 ]; do
         --picker)      ACTION="picker"; shift ;;
         --copy-ssh-keys) ACTION="copy-ssh-keys"; shift ;;
         --sandbox-dev) SANDBOX_DEV=true; shift ;;
+        --no-cache)    NO_CACHE=true; shift ;;
         --environment) ENVIRONMENT="$2"; shift 2 ;;
         --workdir)     WORKDIR="$2"; shift 2 ;;
         --ssh-port)    SSH_PORT="$2"; shift 2 ;;
@@ -124,7 +126,7 @@ show_usage() {
     echo "                 [--ssh-port <port>]"
     echo "  claude-sandbox --restart --environment <name> [--workdir <path>]"
     echo "                 [--ssh-port <port>]"
-    echo "  claude-sandbox --rebuild --environment <name> [--workdir <path>]"
+    echo "  claude-sandbox --rebuild [--no-cache] --environment <name> [--workdir <path>]"
     echo "                 [--ssh-port <port>]"
     echo "  claude-sandbox --connect --environment <name>"
     echo "  claude-sandbox --picker"
@@ -136,6 +138,7 @@ show_usage() {
     echo "  --start            Start the sandbox (build if necessary)"
     echo "  --restart          Stop and restart the container"
     echo "  --rebuild          Force rebuild the container image"
+    echo "  --no-cache         With --rebuild, build without using the Docker layer cache"
     echo "  --connect          SSH into the container"
     echo "  --picker           SSH into the sandbox picker"
     echo "  --copy-ssh-keys    Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
@@ -329,7 +332,11 @@ init_state_dir() {
 sandbox_build() {
     local compose_args
     read -ra compose_args <<< "$(get_compose_args)"
-    docker compose "${compose_args[@]}" build
+    local build_args=()
+    if [ "$NO_CACHE" = true ]; then
+        build_args+=("--no-cache")
+    fi
+    docker compose "${compose_args[@]}" build "${build_args[@]}"
     init_state_dir
 }
 
@@ -402,6 +409,11 @@ show_ssh_warnings() {
 # Check exclusive flags
 if [ "$SANDBOX_DEV" = true ] && [[ "$ACTION" =~ ^(connect|picker|copy-ssh-keys)$ ]]; then
     echo "--sandbox-dev can only be used with --start, --rebuild, or --restart" >&2
+    exit 1
+fi
+
+if [ "$NO_CACHE" = true ] && [ "$ACTION" != "rebuild" ]; then
+    echo "--no-cache can only be used with --rebuild" >&2
     exit 1
 fi
 

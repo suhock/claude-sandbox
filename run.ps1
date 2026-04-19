@@ -10,7 +10,8 @@ param(
     [switch]$Connect,
     [switch]$Picker,
     [switch]$AddFirewallRule,
-    [switch]$SandboxDev
+    [switch]$SandboxDev,
+    [switch]$NoCache
 )
 
 Set-StrictMode -Version Latest
@@ -39,6 +40,11 @@ function Main {
 
     if ($ExclusiveFlags.Count -gt 1) {
         Write-Error "Only one of -Start, -Rebuild, -Restart, -Connect, -Picker, -CopySshKeys, -AddFirewallRule can be specified"
+        exit 1
+    }
+
+    if ($NoCache -and -not $Rebuild) {
+        Write-Error "-NoCache can only be used with -Rebuild"
         exit 1
     }
 
@@ -89,7 +95,7 @@ function Show-Usage {
     Write-Host "                 [-SshPort <port>]"
     Write-Host "  claude-sandbox -Restart [-Environment <name>] [-WorkDir <path>]"
     Write-Host "                 [-SshPort <port>]"
-    Write-Host "  claude-sandbox -Rebuild [-Environment <name>] [-WorkDir <path>]"
+    Write-Host "  claude-sandbox -Rebuild [-NoCache] [-Environment <name>] [-WorkDir <path>]"
     Write-Host "                 [-SshPort <port>]"
     Write-Host "  claude-sandbox -Connect [-Environment <name>]"
     Write-Host "  claude-sandbox -Picker"
@@ -102,6 +108,7 @@ function Show-Usage {
     Write-Host "  -Start            Start the sandbox (build if necessary)"
     Write-Host "  -Restart          Stop and restart the container"
     Write-Host "  -Rebuild          Force rebuild the container image"
+    Write-Host "  -NoCache          With -Rebuild, build without using the Docker layer cache"
     Write-Host "  -Connect          SSH into the container"
     Write-Host "  -Picker           SSH into the sandbox picker"
     Write-Host "  -CopySshKeys      Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
@@ -439,7 +446,9 @@ function Initialize-ComposeEnvironment([string]$InstanceName) {
 }
 
 function Invoke-SandboxBuild([hashtable]$ctx) {
-    docker compose @($ctx.ComposeArgs) build
+    $BuildArgs = @($ctx.ComposeArgs) + @("build")
+    if ($NoCache) { $BuildArgs += "--no-cache" }
+    docker compose @BuildArgs
     Initialize-StateDirectory
 }
 

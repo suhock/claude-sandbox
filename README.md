@@ -79,7 +79,7 @@ Additionally, there is a lightweight management container that discovers all run
 ```powershell
 claude-sandbox [-Start] [-Environment <name>] [-WorkDir <path>] [-SshPort <port>]
 claude-sandbox -Restart [-Environment <name>] [-SshPort <port>]
-claude-sandbox -Rebuild [-Environment <name>] [-WorkDir <path>] [-SshPort <port>]
+claude-sandbox -Rebuild [-NoCache] [-Environment <name>] [-WorkDir <path>] [-SshPort <port>]
 claude-sandbox -Connect [-Environment <name>]
 claude-sandbox -Picker
 claude-sandbox -CopySshKeys
@@ -93,6 +93,7 @@ claude-sandbox -AddFirewallRule [-Environment <name>]
 | `-Start`           | Start the sandbox (build if necessary)                |
 | `-Restart`         | Stop and restart the container                        |
 | `-Rebuild`         | Force rebuild the container image                     |
+| `-NoCache`         | With `-Rebuild`, build without the Docker layer cache |
 | `-Connect`         | SSH into the container                                |
 | `-Picker`          | SSH into the sandbox picker                           |
 | `-CopySshKeys`     | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
@@ -439,4 +440,8 @@ Use the `-Rebuild` flag to force a fresh image build:
 claude-sandbox -Environment base -Rebuild
 ```
 
-This rebuilds the Docker image from scratch without using the cache.
+Docker still uses the layer cache by default. To force a fully fresh build (e.g. to re-run the Claude Code installer or pick up upstream base-image changes), add `-NoCache`:
+
+```powershell
+claude-sandbox -Environment base -Rebuild -NoCache
+```

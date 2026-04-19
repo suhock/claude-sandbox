@@ -206,15 +206,17 @@ while true; do
     idx=$(( (choice + 9) % 10 ))
     if [ $idx -lt ${#sandbox_names[@]} ]; then
         stty echo
-        local rc=0
+        rc=0
         if [ "${sandbox_running[$idx]}" -eq 1 ]; then
             printf "\n\n  ${C_TERTIARY}Connecting...${C_RESET}"
+            read -rsd '' -t 0.01 _ 2>/dev/null || true
             connect_to_sandbox "${sandbox_ports[$idx]}" || rc=$?
         else
             # Start stopped sandbox
             printf "\n\n  ${C_TERTIARY}Starting...${C_RESET}"
             port=$(start_sandbox "${sandbox_names[$idx]}")
             if [ -n "$port" ]; then
+                read -rsd '' -t 0.01 _ 2>/dev/null || true
                 connect_to_sandbox "$port" || rc=$?
             else
                 rc=1
