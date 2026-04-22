@@ -1,4 +1,4 @@
-ARG BASE_IMAGE
+ARG BASE_IMAGE=debian:bookworm-slim
 FROM ${BASE_IMAGE}
 
 # Shared setup

@@ -140,7 +140,7 @@ show_usage() {
     echo "  --rebuild          Force rebuild the container image"
     echo "  --no-cache         With --rebuild, build without using the Docker layer cache"
     echo "  --connect          SSH into the container"
-    echo "  --picker           SSH into the sandbox picker"
+    echo "  --picker           Open the native sandbox picker (interactive menu)"
     echo "  --copy-ssh-keys    Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
     echo ""
     echo "Options:"
@@ -220,8 +220,7 @@ do_connect() {
 }
 
 do_picker() {
-    local port="${PICKER_SSH_PORT:-22000}"
-    ssh -o StrictHostKeyChecking=no -p "$port" claude@localhost
+    exec bash "$SCRIPT_DIR/picker/picker.sh"
 }
 
 stop_picker() {
@@ -407,8 +406,8 @@ show_ssh_warnings() {
 # --- Validation ---
 
 # Check exclusive flags
-if [ "$SANDBOX_DEV" = true ] && [[ "$ACTION" =~ ^(connect|picker|copy-ssh-keys)$ ]]; then
-    echo "--sandbox-dev can only be used with --start, --rebuild, or --restart" >&2
+if [ "$SANDBOX_DEV" = true ] && [[ "$ACTION" =~ ^(connect|copy-ssh-keys)$ ]]; then
+    echo "--sandbox-dev can only be used with --start, --rebuild, --restart, or --picker" >&2
     exit 1
 fi
 

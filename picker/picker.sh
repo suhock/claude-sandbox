@@ -4,6 +4,10 @@
 export LANG=C.utf8
 [ -f ~/.sandbox_env ] && . ~/.sandbox_env
 
+# Target host for sandbox SSH. Inside the picker container this is set to
+# host.docker.internal via ~/.sandbox_env; on a bare host it stays localhost.
+SSH_HOST="${PICKER_SSH_HOST:-localhost}"
+
 # Color palette
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
@@ -40,12 +44,14 @@ discover_sandboxes() {
     while IFS=$'\t' read -r name env workspace project; do
         # Skip if we already have this project in the running list
         local already_listed=0
+
         for running_name in "${sandbox_names[@]}"; do
             if [[ "$running_name" == *"$project"* ]]; then
                 already_listed=1
                 break
             fi
         done
+
         [ $already_listed -eq 1 ] && continue
 
         sandbox_names+=("$name")
@@ -62,6 +68,7 @@ discover_sandboxes() {
     done | sort -k2,3 | awk '{print $1}'))
 
     local tmp_names=() tmp_ports=() tmp_envs=() tmp_workspaces=() tmp_running=()
+
     for i in "${indices[@]}"; do
         tmp_names+=("${sandbox_names[$i]}")
         tmp_ports+=("${sandbox_ports[$i]}")
@@ -69,6 +76,7 @@ discover_sandboxes() {
         tmp_workspaces+=("${sandbox_workspaces[$i]}")
         tmp_running+=("${sandbox_running[$i]}")
     done
+
     sandbox_names=("${tmp_names[@]}")
     sandbox_ports=("${tmp_ports[@]}")
     sandbox_envs=("${tmp_envs[@]}")
@@ -102,10 +110,11 @@ start_sandbox() {
     local retries=0
     while [ $retries -lt 30 ]; do
         if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=1 \
-            -o BatchMode=yes -q -p "$port" claude@host.docker.internal echo ok 2>/dev/null | grep -q ok; then
+            -o BatchMode=yes -q -p "$port" claude@"$SSH_HOST" echo ok 2>/dev/null | grep -q ok; then
             echo "$port"
             return 0
         fi
+
         sleep 1
         retries=$((retries + 1))
     done
@@ -139,6 +148,7 @@ show_menu() {
             local key=$(( (i + 1) % 10 ))
             local env="${sandbox_envs[$i]:-unknown}"
             local workspace="${sandbox_workspaces[$i]:-workspace}"
+
             if [ "${sandbox_running[$i]}" -eq 1 ]; then
                 echo_line "  ${C_PRIMARY}${key}${C_RESET}  ${C_SECONDARY}${workspace} (${env})${C_RESET} ${C_TERTIARY}:${sandbox_ports[$i]}${C_RESET}"
             else
@@ -157,7 +167,7 @@ show_menu() {
 connect_to_sandbox() {
     local port=$1
     ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -o ConnectTimeout=3 -p "$port" claude@host.docker.internal
+        -o ConnectTimeout=3 -p "$port" claude@"$SSH_HOST"
 }
 
 clear
@@ -174,24 +184,29 @@ trap 'stty echo' EXIT
 
 while true; do
     now=$(date +%s)
+
     if [ $REDRAW -eq 1 ] || [ $(( now - LAST_DRAW )) -ge $REFRESH_INTERVAL ]; then
         prev_state="$MENU_STATE"
         discover_sandboxes
         MENU_STATE=$(printf '%s\n' "${sandbox_names[@]}" "${sandbox_running[@]}")
+
         if [ $REDRAW -eq 1 ] || [ "$MENU_STATE" != "$prev_state" ]; then
             show_menu
         fi
+
         REDRAW=0
         LAST_DRAW=$now
     fi
 
     read -rsn1 -t 0.25 choice || continue
     [ -z "$choice" ] && continue
+
     # Flush remaining bytes of escape sequences (e.g. arrow keys)
     if [[ "$choice" == $'\033' ]]; then
         read -rsn2 -t 0.01 _ || true
         continue
     fi
+
     if [ "$choice" = "Q" ] || [ "$choice" = "q" ]; then
         stty echo
         printf "%s\n" "$choice"
@@ -207,6 +222,7 @@ while true; do
     if [ $idx -lt ${#sandbox_names[@]} ]; then
         stty echo
         rc=0
+
         if [ "${sandbox_running[$idx]}" -eq 1 ]; then
             printf "\n\n  ${C_TERTIARY}Connecting...${C_RESET}"
             read -rsd '' -t 0.01 _ 2>/dev/null || true
@@ -215,6 +231,7 @@ while true; do
             # Start stopped sandbox
             printf "\n\n  ${C_TERTIARY}Starting...${C_RESET}"
             port=$(start_sandbox "${sandbox_names[$idx]}")
+
             if [ -n "$port" ]; then
                 read -rsd '' -t 0.01 _ 2>/dev/null || true
                 connect_to_sandbox "$port" || rc=$?
@@ -222,11 +239,14 @@ while true; do
                 rc=1
             fi
         fi
+
         if [ $rc -ne 0 ]; then
             printf "\n  ${C_SECONDARY}Press any key to continue...${C_RESET}"
             read -rsn1
         fi
+
         stty -echo
     fi
+    
     REDRAW=1
 done

@@ -95,7 +95,7 @@ claude-sandbox -AddFirewallRule [-Environment <name>]
 | `-Rebuild`         | Force rebuild the container image                     |
 | `-NoCache`         | With `-Rebuild`, build without the Docker layer cache |
 | `-Connect`         | SSH into the container                                |
-| `-Picker`          | SSH into the sandbox picker                           |
+| `-Picker`          | Open the sandbox picker (interactive menu)            |
 | `-CopySshKeys`     | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
 | `-AddFirewallRule` | Open SSH ports (sandbox + picker) in Windows Firewall (requests elevation) |
 
@@ -173,7 +173,10 @@ Once the sandbox is running, the script outputs two connection options:
       ssh -p 22000 claude@localhost
 ```
 
-The **sandbox picker** is started automatically alongside any sandbox. It listens on port 22000 and presents an interactive menu listing all running and stopped sandboxes. Selecting a stopped sandbox will start it automatically. This is especially useful for remote access, where you only need to remember one port.
+The **sandbox picker** presents an interactive menu listing all running and stopped sandboxes. Selecting a stopped sandbox will start it automatically.
+
+- Locally, open it directly with `claude-sandbox -Picker` — this runs the picker natively on the host (no SSH, no container round-trip).
+- A container-based picker is also started automatically alongside any sandbox and listens on port 22000. This is the entry point for remote access, where you only need to remember one port.
 
 ### Remote access
 
@@ -373,7 +376,8 @@ claude-sandbox/
 │   ├── Dockerfile            # Alpine-based picker image
 │   ├── compose.yml           # Picker container orchestration
 │   ├── dev.compose.yml       # Dev overrides for picker
-│   ├── picker.sh             # Interactive sandbox discovery and menu
+│   ├── picker.sh             # Interactive sandbox discovery and menu (host or in-container)
+│   ├── picker.ps1            # Native Windows picker (used by -Picker)
 │   └── entrypoint.sh         # Injects picker SSH key into authorized_keys
 └── environments/
     ├── dotnet/               # .NET 10.0 environment

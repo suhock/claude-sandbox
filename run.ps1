@@ -33,8 +33,8 @@ $ValidEnvironments = Get-ChildItem -Directory (Join-Path $PSScriptRoot "environm
 
 function Main {
     $ExclusiveFlags = @(@($Start, $Rebuild, $Restart, $Connect, $Picker, $CopySshKeys, $AddFirewallRule) | Where-Object { $_ })
-    if ($SandboxDev -and ($Connect -or $Picker -or $CopySshKeys -or $AddFirewallRule)) {
-        Write-Error "-SandboxDev can only be used with -Start, -Rebuild, or -Restart"
+    if ($SandboxDev -and ($Connect -or $CopySshKeys -or $AddFirewallRule)) {
+        Write-Error "-SandboxDev can only be used with -Start, -Rebuild, -Restart, or -Picker"
         exit 1
     }
 
@@ -110,7 +110,7 @@ function Show-Usage {
     Write-Host "  -Rebuild          Force rebuild the container image"
     Write-Host "  -NoCache          With -Rebuild, build without using the Docker layer cache"
     Write-Host "  -Connect          SSH into the container"
-    Write-Host "  -Picker           SSH into the sandbox picker"
+    Write-Host "  -Picker           Open the native sandbox picker (interactive menu)"
     Write-Host "  -CopySshKeys      Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
     Write-Host "  -AddFirewallRule  Open the SSH port in Windows Firewall (requests UAC)"
     Write-Host ""
@@ -307,9 +307,7 @@ function Invoke-Connect {
 }
 
 function Invoke-Picker {
-    $Port = $env:PICKER_SSH_PORT
-    if (-not $Port) { $Port = 22000 }
-    ssh -o StrictHostKeyChecking=no -p $Port claude@localhost
+    & (Join-Path $PSScriptRoot "picker" "picker.ps1")
 }
 
 function Stop-Picker {
