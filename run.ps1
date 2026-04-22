@@ -147,7 +147,7 @@ function Find-AvailablePort {
 
 function Get-SshPort([string]$InstanceName) {
     if ($SshPort -ne 0) { return $SshPort }
-    $ConfigFile = Join-Path $SandboxDir $InstanceName ".claude-sandbox.json"
+    $ConfigFile = Join-Path (Join-Path $SandboxDir $InstanceName) ".claude-sandbox.json"
     if (Test-Path $ConfigFile) {
         $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json -AsHashtable
         if ($config -and $config.ContainsKey("port")) {
@@ -307,19 +307,20 @@ function Invoke-Connect {
 }
 
 function Invoke-Picker {
-    & (Join-Path $PSScriptRoot "picker" "picker.ps1")
+    & (Join-Path (Join-Path $PSScriptRoot "picker") "picker.ps1")
 }
 
 function Stop-Picker {
-    $PickerCompose = Join-Path $PSScriptRoot "picker" "compose.yml"
+    $PickerCompose = Join-Path (Join-Path $PSScriptRoot "picker") "compose.yml"
     $env:SANDBOX_AUTHORIZED_KEYS = $AuthorizedKeysFile
     docker compose -f $PickerCompose -p claude-picker down 2>$null
 }
 
 function Ensure-Picker {
-    $PickerComposeArgs = @("-f", (Join-Path $PSScriptRoot "picker" "compose.yml"))
+    $PickerDir = Join-Path $PSScriptRoot "picker"
+    $PickerComposeArgs = @("-f", (Join-Path $PickerDir "compose.yml"))
     if ($SandboxDev) {
-        $PickerComposeArgs += @("-f", (Join-Path $PSScriptRoot "picker" "dev.compose.yml"))
+        $PickerComposeArgs += @("-f", (Join-Path $PickerDir "dev.compose.yml"))
     }
 
     # Ensure authorized keys exist
@@ -382,7 +383,7 @@ function Test-SandboxRunning([string[]]$ComposeArgs) {
 
 function Get-ComposeContext {
     $InstanceName = Get-InstanceName $Environment
-    $ComposeArgs = @("-f", (Join-Path $PSScriptRoot "docker-compose.yml"), "-f", (Join-Path $PSScriptRoot "environments" $Environment "compose.yml"))
+    $ComposeArgs = @("-f", (Join-Path $PSScriptRoot "docker-compose.yml"), "-f", (Join-Path (Join-Path (Join-Path $PSScriptRoot "environments") $Environment) "compose.yml"))
 
     if ($SandboxDev) {
         $ComposeArgs += @("-f", (Join-Path $PSScriptRoot "dev.compose.yml"))

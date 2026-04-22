@@ -20,6 +20,12 @@ C_STOPPED='\033[38;5;240m'   # dark gray
 # echo with clear-to-end-of-line
 echo_line() { echo -e "$@\033[K"; }
 
+# Alternate screen buffer — keeps the picker's menu out of the client's
+# scrollback. Drop to the normal screen around nested SSH calls so connection
+# output and errors accumulate there and can be reviewed after the fact.
+enter_alt() { printf '\033[?1049h'; }
+exit_alt()  { printf '\033[?1049l'; }
+
 discover_sandboxes() {
     sandbox_names=()
     sandbox_ports=()
@@ -170,8 +176,6 @@ connect_to_sandbox() {
         -o ConnectTimeout=3 -p "$port" claude@"$SSH_HOST"
 }
 
-clear
-
 # Main loop
 REDRAW=1
 LAST_DRAW=0
@@ -180,7 +184,8 @@ MENU_STATE=""
 
 trap 'REDRAW=1' WINCH
 stty -echo
-trap 'stty echo' EXIT
+enter_alt
+trap 'exit_alt; stty echo' EXIT
 
 while true; do
     now=$(date +%s)
@@ -221,15 +226,17 @@ while true; do
     idx=$(( (choice + 9) % 10 ))
     if [ $idx -lt ${#sandbox_names[@]} ]; then
         stty echo
+        # Drop to the normal screen so connection output lands in scrollback
+        exit_alt
         rc=0
 
         if [ "${sandbox_running[$idx]}" -eq 1 ]; then
-            printf "\n\n  ${C_TERTIARY}Connecting...${C_RESET}"
+            printf "  ${C_TERTIARY}Connecting...${C_RESET}\n"
             read -rsd '' -t 0.01 _ 2>/dev/null || true
             connect_to_sandbox "${sandbox_ports[$idx]}" || rc=$?
         else
             # Start stopped sandbox
-            printf "\n\n  ${C_TERTIARY}Starting...${C_RESET}"
+            printf "  ${C_TERTIARY}Starting...${C_RESET}\n"
             port=$(start_sandbox "${sandbox_names[$idx]}")
 
             if [ -n "$port" ]; then
@@ -245,6 +252,7 @@ while true; do
             read -rsn1
         fi
 
+        enter_alt
         stty -echo
     fi
     

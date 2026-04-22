@@ -1,8 +1,13 @@
-# Interactive sandbox picker — discovers running/stopped sandboxes, starts and connects.
+﻿# Interactive sandbox picker — discovers running/stopped sandboxes, starts and connects.
 # Native Windows/PowerShell counterpart to picker.sh.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# Force legacy native-arg passing so \"-escaping in docker format strings works
+# the same way on PowerShell 5.1 and PowerShell 7.3+ (7.3+ would otherwise use
+# Standard/Windows mode and treat the backslashes as literal). Harmless no-op on 5.1.
+$PSNativeCommandArgumentPassing = 'Legacy'
 
 # Force UTF-8 output so box-drawing glyphs render (default OEM code page emits ?)
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -11,30 +16,41 @@ $ErrorActionPreference = "Stop"
 # bare host; override via PICKER_SSH_HOST to point elsewhere.
 $SSH_HOST = if ($env:PICKER_SSH_HOST) { $env:PICKER_SSH_HOST } else { "localhost" }
 
+# ESC literal — Windows PowerShell 5.1 doesn't understand `e, so build it explicitly.
+$ESC = [char]0x1B
+
 # Color palette (matches picker.sh)
-$C_RESET     = "`e[0m"
-$C_BOLD      = "`e[1m"
-$C_PRIMARY   = "`e[38;5;223m"  # pale yellow
-$C_SECONDARY = "`e[38;5;174m"  # claude code pink
-$C_TERTIARY  = "`e[38;5;246m"  # neutral gray
-$C_STOPPED   = "`e[38;5;240m"  # dark gray
+$C_RESET     = "${ESC}[0m"
+$C_BOLD      = "${ESC}[1m"
+$C_PRIMARY   = "${ESC}[38;5;223m"  # pale yellow
+$C_SECONDARY = "${ESC}[38;5;174m"  # claude code pink
+$C_TERTIARY  = "${ESC}[38;5;246m"  # neutral gray
+$C_STOPPED   = "${ESC}[38;5;240m"  # dark gray
 
 $script:Sandboxes = @()
 $script:HostName  = [System.Net.Dns]::GetHostName()
 
 function Write-Line([string]$Text) {
     # Write with clear-to-end-of-line
-    [Console]::Write("$Text`e[K`n")
+    [Console]::Write("$Text${ESC}[K`n")
 }
+
+# Alternate screen buffer — keeps the picker's menu out of the client's
+# scrollback. Drop to the normal screen around nested SSH calls so connection
+# output and errors accumulate there and can be reviewed after the fact.
+function Enter-Alt { [Console]::Write("${ESC}[?1049h") }
+function Exit-Alt  { [Console]::Write("${ESC}[?1049l") }
 
 function Get-Sandboxes {
     $list = New-Object System.Collections.Generic.List[object]
 
     # Docker format templates — use tab as the field separator. Built by concatenation
     # so the `t escape is interpreted by PowerShell (single-quoted strings wouldn't).
+    # Inner quotes are \"-escaped so Windows PowerShell 5.1 doesn't strip them when
+    # it builds the native command line (the exe's CRT parses \" back to ").
     $TAB = "`t"
-    $runningFmt = '{{.Names}}' + $TAB + '{{.Ports}}' + $TAB + '{{.Label "sandbox.env"}}' + $TAB + '{{.Label "sandbox.workspace"}}' + $TAB + '{{.Label "com.docker.compose.project"}}'
-    $stoppedFmt = '{{.Names}}' + $TAB + '{{.Label "sandbox.env"}}' + $TAB + '{{.Label "sandbox.workspace"}}' + $TAB + '{{.Label "com.docker.compose.project"}}'
+    $runningFmt = '{{.Names}}' + $TAB + '{{.Ports}}' + $TAB + '{{.Label \"sandbox.env\"}}' + $TAB + '{{.Label \"sandbox.workspace\"}}' + $TAB + '{{.Label \"com.docker.compose.project\"}}'
+    $stoppedFmt = '{{.Names}}' + $TAB + '{{.Label \"sandbox.env\"}}' + $TAB + '{{.Label \"sandbox.workspace\"}}' + $TAB + '{{.Label \"com.docker.compose.project\"}}'
 
     # Running sandboxes (gateway containers have the labels + port mapping)
     $runningOut = @(docker ps --filter 'label=sandbox.env' --format $runningFmt 2>$null)
@@ -102,7 +118,7 @@ function Get-Sandboxes {
 function Start-Sandbox([string]$Project) {
     # List all containers in the project, start gateway first
     $TAB = "`t"
-    $fmt = '{{.Names}}' + $TAB + '{{.Label "com.docker.compose.service"}}'
+    $fmt = '{{.Names}}' + $TAB + '{{.Label \"com.docker.compose.service\"}}'
     $containersOut = @(docker ps -a --filter "label=com.docker.compose.project=$Project" --format $fmt 2>$null)
 
     $gateway = $null
@@ -165,8 +181,8 @@ function Start-Sandbox([string]$Project) {
 
 function Show-Menu {
     # Terminal title + cursor home + hide cursor
-    [Console]::Write("`e]0;🟨 $script:HostName`a")
-    [Console]::Write("`e[?25l`e[H")
+    [Console]::Write("${ESC}]0;🟨 $script:HostName`a")
+    [Console]::Write("${ESC}[?25l${ESC}[H")
 
     Write-Line ""
     Write-Line "${C_PRIMARY} ▖▖▖ ▟▙ ▗▗▗ ${C_RESET}"
@@ -208,7 +224,7 @@ function Show-Menu {
     Write-Line ""
 
     # Prompt + clear to end of screen + show cursor
-    [Console]::Write("  ${C_TERTIARY}>${C_RESET} `e[J`e[?25h")
+    [Console]::Write("  ${C_TERTIARY}>${C_RESET} ${ESC}[J${ESC}[?25h")
 }
 
 # NOTE: ssh is invoked inline at the call sites (not from a function) so that
@@ -223,10 +239,11 @@ function Get-MenuState {
 
 # --- Main loop ---
 
-Clear-Host
 [Console]::TreatControlCAsInput = $false
 
 $prevCursor = [Console]::CursorVisible
+
+Enter-Alt
 
 try {
     $redraw           = $true
@@ -283,14 +300,17 @@ try {
         $sb = $script:Sandboxes[$idx]
         $rc = 0
 
+        # Drop to the normal screen so connection output lands in scrollback
+        Exit-Alt
+
         if ($sb.Running) {
-            [Console]::Write("`n`n  ${C_TERTIARY}Connecting...${C_RESET}")
+            [Console]::Write("  ${C_TERTIARY}Connecting...${C_RESET}`n")
             ssh -o StrictHostKeyChecking=no -p $sb.Port claude@$SSH_HOST
             $rc = $LASTEXITCODE
         } else {
-            [Console]::Write("`n`n  ${C_TERTIARY}Starting...${C_RESET}")
+            [Console]::Write("  ${C_TERTIARY}Starting...${C_RESET}`n")
             $port = Start-Sandbox $sb.Project
-            
+
             if ($port -gt 0) {
                 ssh -o StrictHostKeyChecking=no -p $port claude@$SSH_HOST
                 $rc = $LASTEXITCODE
@@ -304,10 +324,12 @@ try {
             [Console]::ReadKey($true) | Out-Null
         }
 
+        Enter-Alt
         $redraw = $true
     }
 }
 finally {
     [Console]::CursorVisible = $prevCursor
-    [Console]::Write("`e[?25h")
+    [Console]::Write("${ESC}[?25h")
+    Exit-Alt
 }
