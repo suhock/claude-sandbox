@@ -293,6 +293,8 @@ claude-sandbox -Environment php
   `use-php` sets a per-user symlink in `~/.local/bin`, so no root is needed.
 - Composer installed globally (runs against whichever version `php` currently points to)
 - Host Composer cache (`~/.composer/cache`) is mounted for persistence
+- **Allowed domains:** documentation sites for PHP and the major tools/frameworks (static analysis, testing, frameworks) plus read-only package metadata are whitelisted for this environment. See `environments/php/allowed-domains.conf` for the current list.
+  - `composer install` resolves dependencies and installs anything already in the mounted cache, but **downloading uncached, GitHub-hosted packages will fail** — dist downloads come from GitHub (`codeload.github.com`/`api.github.com`), which is a full read/write host and is intentionally not allowlisted. Add those two domains to `environments/php/allowed-domains.conf` (and `-Rebuild`) if you need working installs of uncached packages, weighing the larger attack surface.
 
 ### Base (Node.js 22)
 
@@ -339,22 +341,17 @@ claude-sandbox -Environment base
 
 The gateway container routes all traffic from the sandbox through iptables. Only connections to allowed domains are forwarded; everything else is dropped.
 
-Base allowed domains are defined in `gateway/allowed-domains.conf`. To allow additional domains for a specific environment, create an `allowed-domains.conf` in the environment's folder and mount it in `compose.yml`:
+Base allowed domains are defined in `gateway/allowed-domains.conf`. To allow additional domains for a specific environment, just create an `allowed-domains.conf` in the environment's folder — the gateway bakes in `environments/` at build time and `gateway/start.sh` loads the file matching the active `SANDBOX_ENV` automatically, so no `compose.yml` mount is needed:
 
 ```
-environments/dotnet/allowed-domains.conf:
-  api.nuget.org
-  globalcdn.nuget.org
+# environments/dotnet/allowed-domains.conf
+api.nuget.org
+globalcdn.nuget.org
 ```
 
-```yaml
-services:
-  gateway:
-    volumes:
-      - ${SANDBOX_ROOT}/environments/dotnet/allowed-domains.conf:/etc/gateway/allowed-domains.d/env.conf:ro
-```
+Each entry matches the apex domain **and all its subdomains** (e.g. `symfony.com` also covers `cs.symfony.com`). Full-line `#` comments and blank lines are ignored, but **inline comments are not supported** — the loader word-splits unquoted, so `php.net # docs` would treat `#` and `docs` as domains. See `environments/php/allowed-domains.conf` for a worked example.
 
-To allow additional domains globally, add them to `gateway/allowed-domains.conf`.
+To allow additional domains globally, add them to `gateway/allowed-domains.conf`. Either way, changes are baked into the gateway image, so `-Rebuild`.
 
 > **Warning:** Each domain you add expands the attack surface of the sandbox. An AI agent with network access could exfiltrate code, secrets, or conversation context to any allowed host. Only allow domains you trust and that the environment genuinely needs. Avoid broad wildcards or general-purpose hosts (e.g. `pastebin.com`, `github.com`) unless you fully understand the risk.
 
