@@ -1,10 +1,62 @@
 #!/bin/bash
 set -euo pipefail
 
-apt-get update && apt-get install -y \
-    unzip libzip-dev libicu-dev libonig-dev \
-&& docker-php-ext-install zip intl mbstring \
+# Install every supported PHP version side by side from the Ondřej Surý repo
+# (packages.sury.org). These are prebuilt .debs, so nothing compiles here.
+# 7.4 and 8.0 are EOL upstream but Surý still ships them for bookworm.
+VERSIONS="7.4 8.0 8.1 8.2 8.3 8.4"
+
+# Per-version extensions. pcntl is compiled into the CLI SAPI by default, so it
+# has no package. mysql provides mysqli + pdo_mysql.
+EXTENSIONS="cli apcu bcmath imagick mysql tidy intl mbstring zip"
+
+# --- Surý repo ---
+apt-get update && apt-get install -y --no-install-recommends \
+    apt-transport-https ca-certificates curl gnupg lsb-release unzip
+
+curl -sSL https://packages.sury.org/php/apt.gpg -o /etc/apt/trusted.gpg.d/php.gpg
+echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" \
+    > /etc/apt/sources.list.d/php.list
+
+# --- Install all versions + extensions ---
+packages=""
+for v in $VERSIONS; do
+    for e in $EXTENSIONS; do
+        packages="$packages php$v-$e"
+    done
+done
+
+apt-get update && apt-get install -y --no-install-recommends $packages \
 && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Composer globally
+# The highest version wins the `php` alternative by default. Pin it explicitly
+# so the default doesn't drift when the version list changes.
+update-alternatives --set php /usr/bin/php8.4
+
+# --- use-php: switch the default `php` for the current user, no root needed ---
+# Overrides via a symlink in ~/.local/bin (already first on PATH). Composer and
+# anything else that calls `php` follow the selection.
+cat > /usr/local/bin/use-php << 'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p "$HOME/.local/bin"
+if [ -z "${1:-}" ]; then
+    rm -f "$HOME/.local/bin/php"
+    hash -r 2>/dev/null || true
+    echo "php -> $(command -v php) ($(php -v | head -1))"
+    exit 0
+fi
+bin="/usr/bin/php$1"
+if [ ! -x "$bin" ]; then
+    echo "PHP $1 is not installed. Available:" >&2
+    ls /usr/bin/php[0-9]* 2>/dev/null | sed 's|/usr/bin/|  |' >&2
+    exit 1
+fi
+ln -sf "$bin" "$HOME/.local/bin/php"
+hash -r 2>/dev/null || true
+echo "php -> $bin ($("$bin" -v | head -1))"
+SCRIPT
+chmod 755 /usr/local/bin/use-php
+
+# --- Composer (uses whichever PHP is selected via `php` on PATH) ---
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer

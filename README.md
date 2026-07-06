@@ -272,15 +272,25 @@ claude-sandbox -Environment dotnet
 - `csharp-ls` language server installed
 - Host NuGet cache (`~/.nuget/packages`) is mounted for persistence
 
-### PHP 8.4
+### PHP (multi-version)
 
 ```powershell
 claude-sandbox -Environment php
 ```
 
-- **Image:** `php:8.4-cli`
-- Extensions: `zip`, `intl`, `mbstring`
-- Composer installed globally
+- **Image:** `debian:bookworm-slim` with PHP from the [Ondřej Surý repo](https://packages.sury.org)
+- **Versions:** `7.4`, `8.0`, `8.1`, `8.2`, `8.3`, `8.4` — all installed side by side (7.4/8.0 are EOL upstream)
+- Extensions (every version): `zip`, `intl`, `mbstring`, `bcmath`, `mysqli`, `tidy`, `pcntl`, `apcu`, `imagick`
+- Default `php` is 8.4. Call any version directly (`php8.1 script.php`), or switch the default with the `use-php` helper:
+
+  ```bash
+  use-php 7.4     # point `php` (and Composer) at 7.4 for this session
+  php -v          # PHP 7.4.x ...
+  use-php         # reset to the system default (8.4)
+  ```
+
+  `use-php` sets a per-user symlink in `~/.local/bin`, so no root is needed.
+- Composer installed globally (runs against whichever version `php` currently points to)
 - Host Composer cache (`~/.composer/cache`) is mounted for persistence
 
 ### Base (Node.js 22)
