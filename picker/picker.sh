@@ -112,20 +112,40 @@ start_sandbox() {
     local port=$(sudo docker port "${project}-gateway-1" 22 2>/dev/null | sed -n 's/.*:\([0-9]*\)/\1/p' | head -1)
     [ -z "$port" ] && return 1
 
-    # Wait for SSH to become available
+    # Wait for sshd to actually be serving. A plain TCP connect is not enough
+    # on Docker Desktop: the host-side port proxy accepts connections the
+    # moment Docker publishes the port, so the probe succeeds well before
+    # the gateway's socat (and the claude container's sshd) are up. Instead,
+    # read the first bytes from the socket and confirm they are an SSH banner
+    # ("SSH-..."). Only then is the sandbox actually ready to take logins.
     local retries=0
-    while [ $retries -lt 30 ]; do
-        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=1 \
-            -o BatchMode=yes -q -p "$port" claude@"$SSH_HOST" echo ok 2>/dev/null | grep -q ok; then
+    while [ $retries -lt 60 ]; do
+        if test_ssh_ready "$SSH_HOST" "$port"; then
             echo "$port"
             return 0
         fi
 
-        sleep 1
+        sleep 0.5
         retries=$((retries + 1))
     done
 
     return 1
+}
+
+test_ssh_ready() {
+    local host=$1 port=$2
+    local banner
+
+    # Open a TCP socket via bash's /dev/tcp, then read 4 bytes with a 1s timeout.
+    # `timeout` (busybox/coreutils) bounds the whole probe in case the proxy
+    # accepts the connection but the in-container service never sends data.
+    banner=$(timeout 2 bash -c "
+        exec 3<>/dev/tcp/$host/$port 2>/dev/null || exit 1
+        head -c 4 <&3
+        exec 3<&-
+    " 2>/dev/null) || return 1
+
+    [ "$banner" = "SSH-" ]
 }
 
 show_menu() {

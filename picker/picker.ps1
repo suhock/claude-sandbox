@@ -151,32 +151,59 @@ function Start-Sandbox([string]$Project) {
         docker start $c *>$null
     }
 
-    # Resolve SSH port from gateway container
-    $portOut = docker port "$Project-gateway-1" 22 2>$null
+    # Resolve SSH port from gateway container. `docker port` may emit both an
+    # IPv4 and an IPv6 mapping — take the first line, which is sufficient.
+    $portOut = @(docker port "$Project-gateway-1" 22 2>$null) | Select-Object -First 1
 
-    if (-not $portOut) {
-        return 0
-    }
-
-    if ($portOut -notmatch ':(\d+)') {
+    if (-not $portOut -or $portOut -notmatch ':(\d+)') {
         return 0
     }
 
     $port = [int]$Matches[1]
 
-    # Wait for SSH to answer
-    for ($i = 0; $i -lt 30; $i++) {
-        $result = ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL `
-            -o ConnectTimeout=1 -o BatchMode=yes -p $port claude@$SSH_HOST echo ok 2>$null
-
-        if ("$result".Trim() -eq "ok") {
+    # Wait for sshd to actually be serving. A plain TCP connect is not enough
+    # on Docker Desktop: the host-side port proxy accepts connections the
+    # moment Docker publishes the port, so the probe succeeds well before
+    # the gateway's socat (and the claude container's sshd) are up. Instead,
+    # read the first bytes from the socket and confirm they are an SSH banner
+    # ("SSH-..."). Only then is the sandbox actually ready to take logins.
+    for ($i = 0; $i -lt 60; $i++) {
+        if (Test-SshReady $SSH_HOST $port 1000) {
             return $port
         }
-        
-        Start-Sleep -Seconds 1
+
+        Start-Sleep -Milliseconds 500
     }
 
     return 0
+}
+
+function Test-SshReady([string]$Target, [int]$Port, [int]$TimeoutMs) {
+    $tcp = $null
+    try {
+        $tcp = [System.Net.Sockets.TcpClient]::new()
+        $task = $tcp.ConnectAsync($Target, $Port)
+
+        if (-not ($task.Wait($TimeoutMs) -and $tcp.Connected)) {
+            return $false
+        }
+
+        $stream = $tcp.GetStream()
+        $stream.ReadTimeout = $TimeoutMs
+        $buf = [byte[]]::new(4)
+        $read = $stream.Read($buf, 0, 4)
+
+        if ($read -lt 4) {
+            return $false
+        }
+
+        return ([System.Text.Encoding]::ASCII.GetString($buf, 0, 4) -eq 'SSH-')
+    } catch {
+        # Connection refused, RST after handshake, read timeout — keep retrying
+        return $false
+    } finally {
+        if ($tcp) { $tcp.Dispose() }
+    }
 }
 
 function Show-Menu {
