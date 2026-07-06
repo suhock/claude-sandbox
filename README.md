@@ -269,6 +269,7 @@ claude-sandbox -Environment dotnet
 ```
 
 - **Image:** `mcr.microsoft.com/dotnet/sdk:10.0`
+- SDKs 8.0, 9.0, and 11 (preview) installed side-by-side, so `dotnet --list-sdks` reports all four
 - `csharp-ls` language server installed
 - Host NuGet cache (`~/.nuget/packages`) is mounted for persistence
 
