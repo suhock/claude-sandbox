@@ -25,9 +25,11 @@ if [ "$WORKSPACE_UID" != "$CLAUDE_UID" ]; then
         usermod -u "$WORKSPACE_UID" claude
         chown -R "$WORKSPACE_UID:$WORKSPACE_GID" /home/claude
     else
-        # Docker Desktop (Windows/Mac): files are root-owned, chown is
-        # cosmetic inside the container and doesn't affect host permissions
-        chown -R claude:claude /workspace
+        # Docker Desktop (Windows/Mac): bind mounts appear root-owned with
+        # mode 777, so claude can already read/write. Only git's "dubious
+        # ownership" check fails — handle that directly instead of recursively
+        # chowning the workspace (which is multi-minute for large repos).
+        git config --system --add safe.directory "*"
     fi
 fi
 
