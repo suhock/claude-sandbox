@@ -60,3 +60,34 @@ chmod 755 /usr/local/bin/use-php
 
 # --- Composer (uses whichever PHP is selected via `php` on PATH) ---
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# --- Phpactor (language server) + PHPStan (diagnostics) ---
+# Both are PHP programs. Unlike the user's own code, the tooling must NOT follow
+# the `use-php` selection: Phpactor needs PHP 8.2+ to even run, so `use-php 7.4`
+# would break it. Pin both to a fixed modern interpreter via wrappers. The PHP
+# version that PHPStan *analyses for* is a separate concern, set per project in
+# phpstan.neon (parameters.phpVersion) — not tied to the interpreter here.
+# Keep this in sync with the `update-alternatives --set php` default above.
+TOOLING_PHP=/usr/bin/php8.4
+
+curl -fsSL https://github.com/phpactor/phpactor/releases/latest/download/phpactor.phar \
+    -o /usr/local/lib/phpactor.phar
+curl -fsSL https://github.com/phpstan/phpstan/releases/latest/download/phpstan.phar \
+    -o /usr/local/lib/phpstan.phar
+
+for tool in phpactor phpstan; do
+    cat > "/usr/local/bin/$tool" << SCRIPT
+#!/bin/sh
+exec $TOOLING_PHP /usr/local/lib/$tool.phar "\$@"
+SCRIPT
+    chmod 755 "/usr/local/bin/$tool"
+done
+
+# --- Register phpactor with Claude Code's built-in LSP tool ---
+# Claude Code's LSP tool stays dormant until a plugin declares a language
+# server. Ship a "skills-directory" plugin: auto-discovered, no marketplace /
+# install / GitHub required. It can't live in ~/.claude/skills in the image
+# because that path is a bind-mounted volume at runtime; stage it here and let
+# the shared entrypoint seed it into ~/.claude/skills on container start.
+install -D -m 644 /tmp/env/claude-lsp-plugin.json \
+    /opt/claude-skills/php-lsp/.claude-plugin/plugin.json

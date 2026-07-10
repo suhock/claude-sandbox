@@ -41,11 +41,11 @@ There are no tests or linters in this project.
 - **PID 1 matters:** The claude container runs sshd in foreground (`-D -e`) as the main process so it reaps its own children. The gateway uses `init: true` (tini) since it runs two processes (dnsmasq + socat), with a supervision loop that exits if either dies.
 - **DNS-based filtering:** dnsmasq resolves allowed domains into an ipset; iptables FORWARD rules match against that ipset. This avoids hardcoding IPs. dnsmasq listens on `0.0.0.0` so it serves the claude container without interfering with Docker's internal DNS at `127.0.0.11` in the gateway container itself.
 - **SSH auth via AuthorizedKeysCommand:** Keys are read from a host-mounted file on every login, so key changes don't require container restarts. The picker injects its own key at startup for inter-container SSH.
-- **Plugin sync:** Host plugins are mounted read-only; entrypoint copies them into the writable state dir and converts Windows paths to Linux paths in metadata JSON files.
+- **Plugin sync:** Host plugins are mounted read-only; entrypoint copies them into the writable state dir and converts Windows paths to Linux paths in metadata JSON files. The entrypoint also seeds any environment-provided Claude Code skills/LSP plugins staged at `/opt/claude-skills` into `~/.claude/skills` — this must happen at runtime because `~/.claude` is a bind-mounted volume that shadows image contents. The php env uses this to register `phpactor` with Claude Code's built-in LSP tool via a skills-directory plugin.
 
 ## Environments
 
-Each environment in `environments/` can provide: `compose.yml` (base image, extra volumes), `setup-root.sh`, `setup-user.sh`, `allowed-domains.conf` (additional allowed domains), and config files. Current environments: `base` (Node.js 22), `dotnet` (.NET SDKs 8.0/9.0/10.0/11-preview + NuGet), `php` (PHP 7.4/8.0/8.1/8.2/8.3/8.4 side by side via the Surý repo, switchable with `use-php`, + Composer).
+Each environment in `environments/` can provide: `compose.yml` (base image, extra volumes), `setup-root.sh`, `setup-user.sh`, `allowed-domains.conf` (additional allowed domains), and config files. Current environments: `base` (Node.js 22), `dotnet` (.NET SDKs 8.0/9.0/10.0/11-preview + NuGet), `php` (PHP 7.4/8.0/8.1/8.2/8.3/8.4 side by side via the Surý repo, switchable with `use-php`, + Composer, + Phpactor language server with PHPStan diagnostics, auto-registered with Claude Code's LSP tool — the tooling is pinned to php8.4 regardless of `use-php`).
 
 ## Editing Container Scripts
 

@@ -292,6 +292,9 @@ claude-sandbox -Environment php
 
   `use-php` sets a per-user symlink in `~/.local/bin`, so no root is needed.
 - Composer installed globally (runs against whichever version `php` currently points to)
+- **Language server:** [Phpactor](https://phpactor.readthedocs.io) is installed as `phpactor` (go-to-definition, references, hover, completion, refactoring), with [PHPStan](https://phpstan.org) diagnostics wired in through it via a global `phpstan`. Drop a `phpstan.neon` into a project to get analysis; a project can override the analyzer (e.g. point at its own `vendor/bin/phpstan`) with a `.phpactor.json`.
+  - **Claude Code uses it automatically.** The image ships a small Claude Code [*skills-directory plugin*](https://code.claude.com/docs/en/plugins-reference) that registers `phpactor` with Claude Code's built-in `LSP` tool, so the in-sandbox Claude gets code navigation and inline diagnostics with no setup. (Installing the binary alone is not enough — Claude Code's LSP tool is dormant until a plugin declares the server. The plugin is staged in the image and seeded into `~/.claude/skills/` by the entrypoint at startup, because `~/.claude` is a mounted volume.)
+  - Unlike your code, the tooling does **not** follow `use-php` — both `phpactor` and `phpstan` always run on PHP 8.4 (they need a modern PHP to run). The version PHPStan *analyzes for* is set per project in `phpstan.neon` (`parameters.phpVersion`).
 - Host Composer cache (`~/.composer/cache`) is mounted for persistence
 - **Allowed domains:** documentation sites for PHP and the major tools/frameworks (static analysis, testing, frameworks) plus read-only package metadata are whitelisted for this environment. See `environments/php/allowed-domains.conf` for the current list.
   - `composer install` resolves dependencies and installs anything already in the mounted cache, but **downloading uncached, GitHub-hosted packages will fail** — dist downloads come from GitHub (`codeload.github.com`/`api.github.com`), which is a full read/write host and is intentionally not allowlisted. Add those two domains to `environments/php/allowed-domains.conf` (and `-Rebuild`) if you need working installs of uncached packages, weighing the larger attack surface.
@@ -391,9 +394,11 @@ claude-sandbox/
     ├── dotnet/               # .NET 10.0 environment
     │   ├── compose.yml
     │   └── setup-user.sh
-    ├── php/                  # PHP 8.4 environment
+    ├── php/                  # PHP multi-version environment
     │   ├── compose.yml
-    │   └── setup-root.sh
+    │   ├── setup-root.sh
+    │   ├── setup-user.sh
+    │   └── claude-lsp-plugin.json  # Registers phpactor with Claude Code's LSP tool
     └── base/                 # Node.js 22 environment
         └── compose.yml
 ```

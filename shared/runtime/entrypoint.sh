@@ -27,6 +27,15 @@ if [ -d /host-plugins ]; then
     done
 fi
 
+# Seed environment-provided Claude Code skills / LSP plugins. Environments stage
+# content under /opt/claude-skills at build time; copy it into the skills dir at
+# runtime because ~/.claude is a bind mount that shadows anything baked into the
+# image. This is how the php environment registers phpactor with the LSP tool.
+if [ -d /opt/claude-skills ]; then
+    mkdir -p ~/.claude/skills
+    cp -rf /opt/claude-skills/. ~/.claude/skills/
+fi
+
 # Make container env vars available to SSH sessions
 echo "export SANDBOX_ENV=\"$SANDBOX_ENV\"" > /home/claude/.sandbox_env
 echo "export SANDBOX_WORKSPACE=\"$SANDBOX_WORKSPACE\"" >> /home/claude/.sandbox_env

@@ -1,0 +1,15 @@
+{
+  "name": "php-lsp",
+  "displayName": "PHP LSP (phpactor)",
+  "description": "PHP language server via phpactor, with PHPStan diagnostics",
+  "version": "1.0.0",
+  "lspServers": {
+    "php": {
+      "command": "phpactor",
+      "args": ["language-server"],
+      "extensionToLanguage": {
+        ".php": "php"
+      }
+    }
+  }
+}
