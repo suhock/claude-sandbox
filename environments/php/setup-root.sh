@@ -4,7 +4,9 @@ set -euo pipefail
 # Install every supported PHP version side by side from the Ondřej Surý repo
 # (packages.sury.org). These are prebuilt .debs, so nothing compiles here.
 # 7.4 and 8.0 are EOL upstream but Surý still ships them for bookworm.
-VERSIONS="7.4 8.0 8.1 8.2 8.3 8.4"
+# 8.6 has no packages in the Surý bookworm repo yet, so it can't be added here
+# (this env installs prebuilt .debs only — no from-source builds).
+VERSIONS="7.4 8.0 8.1 8.2 8.3 8.4 8.5"
 
 # Per-version extensions. pcntl is compiled into the CLI SAPI by default, so it
 # has no package. mysql provides mysqli + pdo_mysql.

@@ -280,7 +280,7 @@ claude-sandbox -Environment php
 ```
 
 - **Image:** `debian:bookworm-slim` with PHP from the [Ondřej Surý repo](https://packages.sury.org)
-- **Versions:** `7.4`, `8.0`, `8.1`, `8.2`, `8.3`, `8.4` — all installed side by side (7.4/8.0 are EOL upstream)
+- **Versions:** `7.4`, `8.0`, `8.1`, `8.2`, `8.3`, `8.4`, `8.5` — all installed side by side (7.4/8.0 are EOL upstream; 8.5 is the current stable)
 - Extensions (every version): `zip`, `intl`, `mbstring`, `bcmath`, `mysqli`, `tidy`, `pcntl`, `apcu`, `imagick`
 - Default `php` is 8.4. Call any version directly (`php8.1 script.php`), or switch the default with the `use-php` helper:
 
