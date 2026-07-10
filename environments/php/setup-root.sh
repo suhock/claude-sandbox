@@ -8,9 +8,19 @@ set -euo pipefail
 # (this env installs prebuilt .debs only — no from-source builds).
 VERSIONS="7.4 8.0 8.1 8.2 8.3 8.4 8.5"
 
-# Per-version extensions. pcntl is compiled into the CLI SAPI by default, so it
-# has no package. mysql provides mysqli + pdo_mysql.
-EXTENSIONS="cli apcu bcmath imagick mysql tidy intl mbstring zip"
+# Per-version extensions, installed as php$v-$e. pcntl is compiled into the CLI
+# SAPI by default, so it has no package. Several packages bundle multiple
+# extensions:
+#   xml     -> dom, simplexml, xml, xmlreader, xmlwriter  (all hard-required by
+#              PHPUnit, and by most frameworks — the reason this list grew)
+#   mysql   -> mysqli + pdo_mysql
+#   pgsql   -> pgsql + pdo_pgsql
+#   sqlite3 -> sqlite3 + pdo_sqlite
+# Common built-ins (pdo, phar, tokenizer, fileinfo, ctype, iconv, ...) ship in
+# php$v-common, which php$v-cli pulls in as a dependency. opcache is deliberately
+# omitted: there is no php8.5-opcache package (it moved into the base package in
+# 8.5) and it is a perf feature, not a hard dependency of anything here.
+EXTENSIONS="cli apcu bcmath curl gd gmp imagick intl mbstring mysql pgsql readline redis soap sqlite3 tidy xml zip"
 
 # --- Surý repo ---
 apt-get update && apt-get install -y --no-install-recommends \
