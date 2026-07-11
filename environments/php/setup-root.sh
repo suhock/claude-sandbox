@@ -20,7 +20,10 @@ VERSIONS="7.4 8.0 8.1 8.2 8.3 8.4 8.5"
 # php$v-common, which php$v-cli pulls in as a dependency. opcache is deliberately
 # omitted: there is no php8.5-opcache package (it moved into the base package in
 # 8.5) and it is a perf feature, not a hard dependency of anything here.
-EXTENSIONS="cli apcu bcmath curl gd gmp imagick intl mbstring mysql pgsql readline redis soap sqlite3 tidy xml zip"
+# xdebug + pcov are the debugger and coverage drivers. xdebug is forced off
+# after install (it otherwise taxes every run — see the xdebug.mode block below);
+# pcov stays loaded and drives PHPUnit line coverage cheaply.
+EXTENSIONS="cli apcu bcmath curl gd gmp imagick intl mbstring mysql pcov pgsql readline redis soap sqlite3 tidy xdebug xml zip"
 
 # --- Surý repo ---
 apt-get update && apt-get install -y --no-install-recommends \
@@ -44,6 +47,18 @@ apt-get update && apt-get install -y --no-install-recommends $packages \
 # The highest version wins the `php` alternative by default. Pin it explicitly
 # so the default doesn't drift when the version list changes.
 update-alternatives --set php /usr/bin/php8.4
+
+# --- Xdebug: installed but dormant by default ---
+# The Surý package enables xdebug.mode=develop, which slows every PHP run and
+# rewrites var_dump/error output. Force it off so normal runs stay fast; it is
+# opt-in per command via the XDEBUG_MODE env var, which overrides this ini:
+#   XDEBUG_MODE=debug    php script.php                    # step debugging
+#   XDEBUG_MODE=develop  php script.php                    # richer errors/dumps
+#   XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-text
+# PHPUnit/Pest line coverage needs none of this — pcov is always loaded.
+for v in $VERSIONS; do
+    echo 'xdebug.mode=off' > "/etc/php/$v/cli/conf.d/99-xdebug-off.ini"
+done
 
 # --- use-php: switch the default `php` for the current user, no root needed ---
 # Overrides via a symlink in ~/.local/bin (already first on PATH). Composer and

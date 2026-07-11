@@ -45,7 +45,7 @@ There are no tests or linters in this project.
 
 ## Environments
 
-Each environment in `environments/` can provide: `compose.yml` (base image, extra volumes), `setup-root.sh`, `setup-user.sh`, `allowed-domains.conf` (additional allowed domains), and config files. Current environments: `base` (Node.js 22), `dotnet` (.NET SDKs 8.0/9.0/10.0/11-preview + NuGet), `php` (PHP 7.4/8.0/8.1/8.2/8.3/8.4/8.5 side by side via the Surý repo, switchable with `use-php`, + Composer, + Phpactor language server with PHPStan diagnostics, auto-registered with Claude Code's LSP tool — the tooling is pinned to php8.4 regardless of `use-php`).
+Each environment in `environments/` can provide: `compose.yml` (base image, extra volumes), `setup-root.sh`, `setup-user.sh`, `allowed-domains.conf` (additional allowed domains), and config files. Current environments: `base` (Node.js 22), `dotnet` (.NET SDKs 8.0/9.0/10.0/11-preview + NuGet), `php` (PHP 7.4/8.0/8.1/8.2/8.3/8.4/8.5 side by side via the Surý repo, switchable with `use-php`, + Composer, + Xdebug/pcov for coverage and step-debugging (Xdebug off by default, opt in per-command via `XDEBUG_MODE`; pcov drives PHPUnit coverage), + Phpactor language server with PHPStan diagnostics, auto-registered with Claude Code's LSP tool — the tooling is pinned to php8.4 regardless of `use-php`).
 
 ## Editing Container Scripts
 
