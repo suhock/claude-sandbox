@@ -50,11 +50,25 @@ services:
     environment:
       - SANDBOX_ENV=${SANDBOX_ENV:-unknown}
       - SANDBOX_WORKSPACE=${SANDBOX_WORKSPACE:-workspace}
+      # No mid-session upgrades; the entrypoint unsets this for the explicit
+      # `claude update` it attempts at every start (see shared/runtime/entrypoint.sh).
       - DISABLE_AUTOUPDATER=1
       - TERM=xterm-256color
     volumes:
+      # Persistent per-instance home. A plain named volume is scoped to the
+      # compose project (claude-<instance>), so it is per-instance for free.
+      # Seeded from the image on first creation (includes the baked ~/.local
+      # Claude install + env tooling); survives restart/rebuild. The binds
+      # below nest on top (more-specific path wins), so .claude/.claude.json
+      # stay host-visible and the workspace/env caches keep their behavior.
+      - claude-home:/home/claude
       - ${DEV_DIR:-/dev/null}:/workspace
       - ${CLAUDE_STATE_DIR:-/dev/null}/.claude:/home/claude/.claude
       - ${CLAUDE_STATE_DIR:-/dev/null}/.claude.json:/home/claude/.claude.json
       - ${HOST_PLUGINS_DIR:-/dev/null}:/host-plugins:ro
       - ${SANDBOX_AUTHORIZED_KEYS}:/host-ssh-keys/authorized_keys:ro
+
+volumes:
+  # Sandbox plumbing (scripts, tmux/bashrc config) lives in the image under
+  # /opt/sandbox, NOT here, so rebuilds always refresh it despite this volume.
+  claude-home:

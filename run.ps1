@@ -10,6 +10,7 @@ param(
     [switch]$Connect,
     [switch]$Picker,
     [switch]$AddFirewallRule,
+    [switch]$UpdateClaude,
     [switch]$SandboxDev,
     [switch]$NoCache
 )
@@ -32,14 +33,14 @@ $ValidEnvironments = Get-ChildItem -Directory (Join-Path $PSScriptRoot "environm
 # --- Functions ---
 
 function Main {
-    $ExclusiveFlags = @(@($Start, $Rebuild, $Restart, $Connect, $Picker, $CopySshKeys, $AddFirewallRule) | Where-Object { $_ })
-    if ($SandboxDev -and ($Connect -or $CopySshKeys -or $AddFirewallRule)) {
+    $ExclusiveFlags = @(@($Start, $Rebuild, $Restart, $Connect, $Picker, $CopySshKeys, $AddFirewallRule, $UpdateClaude) | Where-Object { $_ })
+    if ($SandboxDev -and ($Connect -or $CopySshKeys -or $AddFirewallRule -or $UpdateClaude)) {
         Write-Error "-SandboxDev can only be used with -Start, -Rebuild, -Restart, or -Picker"
         exit 1
     }
 
     if ($ExclusiveFlags.Count -gt 1) {
-        Write-Error "Only one of -Start, -Rebuild, -Restart, -Connect, -Picker, -CopySshKeys, -AddFirewallRule can be specified"
+        Write-Error "Only one of -Start, -Rebuild, -Restart, -Connect, -Picker, -CopySshKeys, -AddFirewallRule, -UpdateClaude can be specified"
         exit 1
     }
 
@@ -77,6 +78,11 @@ function Main {
         exit (Invoke-AddFirewallRule)
     }
 
+    if ($UpdateClaude) {
+        Invoke-UpdateClaude
+        return
+    }
+
     if ($Connect) {
         Invoke-Connect
     } elseif ($Restart) {
@@ -98,6 +104,7 @@ function Show-Usage {
     Write-Host "  claude-sandbox -Rebuild [-NoCache] [-Environment <name>] [-WorkDir <path>]"
     Write-Host "                 [-SshPort <port>]"
     Write-Host "  claude-sandbox -Connect [-Environment <name>]"
+    Write-Host "  claude-sandbox -UpdateClaude [-Environment <name>]"
     Write-Host "  claude-sandbox -Picker"
     Write-Host "  claude-sandbox -CopySshKeys"
     Write-Host "  claude-sandbox -AddFirewallRule [-Environment <name>]"
@@ -110,6 +117,7 @@ function Show-Usage {
     Write-Host "  -Rebuild          Force rebuild the container image"
     Write-Host "  -NoCache          With -Rebuild, build without using the Docker layer cache"
     Write-Host "  -Connect          SSH into the container"
+    Write-Host "  -UpdateClaude     Update Claude Code in the persistent home volume (no rebuild)"
     Write-Host "  -Picker           Open the native sandbox picker (interactive menu)"
     Write-Host "  -CopySshKeys      Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
     Write-Host "  -AddFirewallRule  Open the SSH port in Windows Firewall (requests UAC)"
@@ -304,6 +312,24 @@ function Invoke-Connect {
         exit 1
     }
     ssh -o StrictHostKeyChecking=no -p $Port claude@localhost
+}
+
+function Invoke-UpdateClaude {
+    $ctx = Get-ComposeContext
+
+    # The install lives in the persistent home volume, so the update sticks.
+    # Bring the stack up first if needed (compose builds the image if missing).
+    if (-not (Test-SandboxRunning $ctx.ComposeArgs)) {
+        Write-Host "Sandbox not running; starting it to apply the update..."
+        Invoke-SandboxUp $ctx
+    }
+
+    Write-Host ""
+    Write-Host "Updating Claude Code in [$($ctx.InstanceName)]..."
+
+    # Unset DISABLE_AUTOUPDATER (set for the running session) so the explicit
+    # update is never suppressed.
+    docker compose @($ctx.ComposeArgs) exec -T -u claude claude env -u DISABLE_AUTOUPDATER bash -lc 'claude update; echo; claude --version'
 }
 
 function Invoke-Picker {

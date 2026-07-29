@@ -32,6 +32,7 @@ while [ $# -gt 0 ]; do
         --rebuild)     ACTION="rebuild"; shift ;;
         --restart)     ACTION="restart"; shift ;;
         --connect)     ACTION="connect"; shift ;;
+        --update-claude) ACTION="update-claude"; shift ;;
         --picker)      ACTION="picker"; shift ;;
         --copy-ssh-keys) ACTION="copy-ssh-keys"; shift ;;
         --sandbox-dev) SANDBOX_DEV=true; shift ;;
@@ -129,6 +130,7 @@ show_usage() {
     echo "  claude-sandbox --rebuild [--no-cache] --environment <name> [--workdir <path>]"
     echo "                 [--ssh-port <port>]"
     echo "  claude-sandbox --connect --environment <name>"
+    echo "  claude-sandbox --update-claude --environment <name>"
     echo "  claude-sandbox --picker"
     echo "  claude-sandbox --copy-ssh-keys"
     echo ""
@@ -140,6 +142,7 @@ show_usage() {
     echo "  --rebuild          Force rebuild the container image"
     echo "  --no-cache         With --rebuild, build without using the Docker layer cache"
     echo "  --connect          SSH into the container"
+    echo "  --update-claude    Update Claude Code in the persistent home volume (no rebuild)"
     echo "  --picker           Open the native sandbox picker (interactive menu)"
     echo "  --copy-ssh-keys    Populate ~/.claude-sandbox/authorized_keys from ~/.ssh"
     echo ""
@@ -217,6 +220,26 @@ do_connect() {
         exit 1
     fi
     ssh -o StrictHostKeyChecking=no -p "$port" claude@localhost
+}
+
+do_update_claude() {
+    init_compose_env "$instance_name"
+    local compose_args
+    read -ra compose_args <<< "$(get_compose_args)"
+
+    # The install lives in the persistent home volume, so the update sticks.
+    # Bring the stack up first if needed (compose builds the image if missing).
+    if ! test_sandbox_running "${compose_args[@]}"; then
+        echo "Sandbox not running; starting it to apply the update..."
+        sandbox_up "$ALLOCATED_PORT" "$instance_name"
+    fi
+
+    echo ""
+    echo "Updating Claude Code in [$instance_name]..."
+
+    # Unset DISABLE_AUTOUPDATER (set for the running session) so the explicit
+    # update is never suppressed.
+    docker compose "${compose_args[@]}" exec -T -u claude claude env -u DISABLE_AUTOUPDATER bash -lc 'claude update; echo; claude --version'
 }
 
 do_picker() {
@@ -406,7 +429,7 @@ show_ssh_warnings() {
 # --- Validation ---
 
 # Check exclusive flags
-if [ "$SANDBOX_DEV" = true ] && [[ "$ACTION" =~ ^(connect|copy-ssh-keys)$ ]]; then
+if [ "$SANDBOX_DEV" = true ] && [[ "$ACTION" =~ ^(connect|copy-ssh-keys|update-claude)$ ]]; then
     echo "--sandbox-dev can only be used with --start, --rebuild, --restart, or --picker" >&2
     exit 1
 fi
@@ -460,6 +483,9 @@ instance_name="$(get_instance_name "$ENVIRONMENT")"
 case "$ACTION" in
     connect)
         do_connect
+        ;;
+    update-claude)
+        do_update_claude
         ;;
     restart)
         init_compose_env "$instance_name"

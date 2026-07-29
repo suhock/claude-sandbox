@@ -81,6 +81,7 @@ claude-sandbox [-Start] [-Environment <name>] [-WorkDir <path>] [-SshPort <port>
 claude-sandbox -Restart [-Environment <name>] [-SshPort <port>]
 claude-sandbox -Rebuild [-NoCache] [-Environment <name>] [-WorkDir <path>] [-SshPort <port>]
 claude-sandbox -Connect [-Environment <name>]
+claude-sandbox -UpdateClaude [-Environment <name>]
 claude-sandbox -Picker
 claude-sandbox -CopySshKeys
 claude-sandbox -AddFirewallRule [-Environment <name>]
@@ -95,6 +96,7 @@ claude-sandbox -AddFirewallRule [-Environment <name>]
 | `-Rebuild`         | Force rebuild the container image                     |
 | `-NoCache`         | With `-Rebuild`, build without the Docker layer cache |
 | `-Connect`         | SSH into the container                                |
+| `-UpdateClaude`    | Update Claude Code in place in the persistent home volume (no image rebuild) |
 | `-Picker`          | Open the sandbox picker (interactive menu)            |
 | `-CopySshKeys`     | Import SSH keys from `~/.ssh` (see [below](#ssh-authentication)) |
 | `-AddFirewallRule` | Open SSH ports (sandbox + picker) in Windows Firewall (requests elevation) |
@@ -248,6 +250,35 @@ docker compose -p <instance-name> down
 Remove-Item -Recurse ~\.claude-sandbox\<instance-name>
 ```
 
+### Persistent home & updating Claude
+
+Each instance gets a **persistent home volume** (`claude-<instance-name>_claude-home`) mounted at `/home/claude`. It is seeded from the image on first launch and then survives `-Restart` and `-Rebuild`, so the Claude Code install (`~/.local`), env tooling, caches (`~/.cache`, `~/.npm`, `~/.composer`), shell history, and anything you leave in your home directory all persist. (Your `~/.claude`, `~/.claude.json`, and the workspace are host-mounted on top of the volume, exactly as before.)
+
+Because the install persists, Claude Code is upgraded **without rebuilding the image** — every environment attempts an update on each start. The entrypoint runs `claude update` in the background just before sshd comes up, so it never delays your connection, and a failed attempt (offline host, blocked network, download hiccup) is logged and ignored rather than stopping the sandbox. The result shows up in the container log:
+
+```powershell
+docker compose -p claude-<instance-name> logs claude
+# Claude Code 2.1.218 (Claude Code) — checking for updates...
+# Claude Code now at 2.1.220 (Claude Code)
+```
+
+Because the update runs in the background, a session started within a few seconds of launch may still be on the previous version until the next start. To update on demand instead — and see the output directly:
+
+```powershell
+claude-sandbox -Environment base -UpdateClaude
+```
+
+This runs `claude update` inside the instance (starting it first if needed); either way the new version is written into the volume and sticks across restarts.
+
+> **Trade-off:** since the home volume is only seeded once, `-Rebuild` does **not** refresh home-directory content (the Claude version, `~/.local` tooling, caches). Rebuilds still refresh the OS packages and the sandbox plumbing (which lives in `/opt/sandbox`, outside the volume). To force a fresh home seeded from a newly built image, reset the volume:
+>
+> ```powershell
+> docker compose -p claude-<instance-name> down -v   # -v also removes the home volume
+> claude-sandbox -Environment <name>                 # re-seeds from the image
+> ```
+>
+> This discards persisted home contents (including any repos cloned into `~`), so back them up first.
+
 ### Plugins
 
 Plugins are supported by syncing them from your host machine's Claude Code installation. To use plugins in a sandbox:
@@ -375,13 +406,13 @@ claude-sandbox/
 ├── shared/
 │   ├── Dockerfile            # Base image for all sandbox environments
 │   ├── setup-root.sh         # Root-level setup (packages, sshd, user creation)
-│   ├── setup-user.sh         # User-level setup (bashrc, Claude Code, tmux)
+│   ├── setup-user.sh         # User-level setup (bashrc source line, Claude Code install)
 │   ├── config/
-│   │   ├── tmux.conf         # Tmux configuration (status bar, key bindings)
-│   │   └── bashrc.append     # Appended to ~/.bashrc at build time
+│   │   ├── tmux.conf         # Tmux config (installed to /opt/sandbox/tmux.conf)
+│   │   └── bashrc.append     # Sandbox shell init (installed to /opt/sandbox/bashrc.sh, sourced from ~/.bashrc)
 │   └── runtime/
 │       ├── init.sh           # Container init (networking, drops to claude user)
-│       ├── entrypoint.sh     # Container startup (plugin sync, SSH, etc.)
+│       ├── entrypoint.sh     # Container startup (plugin sync, Claude update, SSH, etc.)
 │       ├── tmux-picker.sh    # Tmux session attach/create on SSH connect
 │       └── new-window.sh     # Creates new tmux windows (used by status bar buttons)
 ├── picker/

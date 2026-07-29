@@ -7,11 +7,15 @@ RUN bash /tmp/setup-root.sh
 
 USER claude
 COPY shared/setup-user.sh /tmp/setup-user.sh
-COPY shared/config/ /tmp/shared/
 RUN bash /tmp/setup-user.sh
 
-COPY --chmod=755 --chown=claude:claude shared/runtime/tmux-picker.sh /home/claude/tmux-picker.sh
-COPY --chmod=755 --chown=claude:claude shared/runtime/new-window.sh /home/claude/new-window.sh
+# Sandbox plumbing lives outside /home/claude so the persistent home volume
+# (which shadows /home/claude and only seeds from the image on first creation)
+# can never make it stale — rebuilds always refresh these.
+COPY --chmod=755 shared/runtime/tmux-picker.sh /opt/sandbox/tmux-picker.sh
+COPY --chmod=755 shared/runtime/new-window.sh /opt/sandbox/new-window.sh
+COPY --chmod=644 shared/config/tmux.conf /opt/sandbox/tmux.conf
+COPY --chmod=644 shared/config/bashrc.append /opt/sandbox/bashrc.sh
 COPY --chmod=755 --chown=claude:claude shared/runtime/entrypoint.sh /entrypoint.sh
 COPY --chmod=755 shared/runtime/init.sh /init.sh
 

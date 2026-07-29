@@ -4,7 +4,7 @@
 export LANG=C.utf8
 
 SESSION="sandbox"
-TMUX_CONF=~/.tmux-sandbox.conf
+TMUX_CONF=/opt/sandbox/tmux.conf
 workspace="${SANDBOX_WORKSPACE:-workspace}"
 
 if ! tmux -f "$TMUX_CONF" has-session -t "$SESSION" 2>/dev/null; then

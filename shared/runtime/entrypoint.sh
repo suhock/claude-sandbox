@@ -36,6 +36,28 @@ if [ -d /opt/claude-skills ]; then
     cp -rf /opt/claude-skills/. ~/.claude/skills/
 fi
 
+# Attempt a Claude Code update on every start. The install lives in the
+# persistent home volume (~/.local), so the new version sticks across restarts
+# without an image rebuild — the same thing `claude-sandbox -UpdateClaude` does,
+# just automatic, so long-lived sandboxes don't drift behind the current release.
+#
+# Backgrounded on purpose: a synchronous download would delay sshd, and the CLI
+# only waits a few seconds for it before printing connection details. Failures
+# (offline host, gateway rules, download hiccup) are logged and ignored — an
+# unreachable network must never keep the sandbox from coming up. DISABLE_AUTOUPDATER
+# is set for interactive sessions, so unset it for this explicit update, and cap
+# the attempt with a timeout so a stalled download can't hang around forever.
+if command -v claude >/dev/null 2>&1; then
+    (
+        echo "Claude Code $(claude --version 2>/dev/null) — checking for updates..."
+        if timeout 300 env -u DISABLE_AUTOUPDATER claude update; then
+            echo "Claude Code now at $(claude --version 2>/dev/null)"
+        else
+            echo "Claude Code update attempt failed (exit $?); keeping the installed version" >&2
+        fi
+    ) &
+fi
+
 # Make container env vars available to SSH sessions
 echo "export SANDBOX_ENV=\"$SANDBOX_ENV\"" > /home/claude/.sandbox_env
 echo "export SANDBOX_WORKSPACE=\"$SANDBOX_WORKSPACE\"" >> /home/claude/.sandbox_env
