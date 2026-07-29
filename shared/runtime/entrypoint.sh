@@ -27,6 +27,16 @@ if [ -d /host-plugins ]; then
     done
 fi
 
+# Install the hook that sources the sandbox shell init. This must happen at
+# runtime, not at build time: ~/.bashrc is in the persistent home volume, which
+# seeds from the image only on first creation. Deleting before appending keeps it
+# idempotent and retires the pre-/opt/sandbox init, whose trailing
+# `exec ~/tmux-picker.sh` would otherwise shadow the hook.
+BASHRC_HOOK='[ -f /opt/sandbox/bashrc.sh ] && . /opt/sandbox/bashrc.sh'
+touch ~/.bashrc
+sed -i -e '/tmux-picker\.sh/d' -e '\|/opt/sandbox/bashrc\.sh|d' ~/.bashrc
+echo "$BASHRC_HOOK" >> ~/.bashrc
+
 # Seed environment-provided Claude Code skills / LSP plugins. Environments stage
 # content under /opt/claude-skills at build time; copy it into the skills dir at
 # runtime because ~/.claude is a bind mount that shadows anything baked into the
