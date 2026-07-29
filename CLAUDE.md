@@ -50,7 +50,7 @@ Each environment in `environments/` can provide: `compose.yml` (base image, extr
 
 ## Editing Container Scripts
 
-Shell scripts in `shared/runtime/` and `gateway/` run inside containers. Changes require rebuilding (`docker compose build`) unless using `-SandboxDev` mode which bind-mounts them. The gateway uses `/bin/sh` (Alpine/busybox ash); the claude container and picker use `/bin/bash`. In the claude container the sandbox scripts and config (`tmux-picker.sh`, `new-window.sh`, `tmux.conf`, `bashrc.append` → `bashrc.sh`) are installed under `/opt/sandbox/`, deliberately outside the persistent `/home/claude` volume so rebuilds always refresh them.
+Shell scripts in `shared/runtime/` and `gateway/` run inside containers. Changes require rebuilding (`docker compose build`) unless using `-SandboxDev` mode which bind-mounts them. The gateway uses `/bin/sh` (Alpine/busybox ash); the claude container and picker use `/bin/bash`. In the claude container the sandbox scripts and config (`tmux-picker.sh`, `new-window.sh`, `tmux.conf`, `bashrc.append` → `bashrc.sh`) are installed under `/opt/sandbox/`, deliberately outside the persistent `/home/claude` volume so rebuilds always refresh them. Since tmux is started with `-f`, which suppresses the default config search, `tmux.conf` explicitly sources `~/.tmux.conf` and `~/.config/tmux/tmux.conf` last so user overrides win.
 
 **`-SandboxDev` limitations:** Config files like `tmux.conf` are bind-mounted by `dev.compose.yml`, but tmux reads its config only at session creation. Changes to `tmux.conf` always require `-Rebuild` since `-Restart` alone won't cause tmux to re-read the config.
 

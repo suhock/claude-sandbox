@@ -235,6 +235,8 @@ When you SSH in, you're automatically attached to a tmux session. On first conne
 
 **Switching windows:** Click a window tab in the status bar, or use `Ctrl-b <number>`.
 
+**Customising tmux:** The sandbox config is loaded from `/opt/sandbox/tmux.conf`, which sources `~/.tmux.conf` (or `~/.config/tmux/tmux.conf`) last, so anything you put there overrides the defaults. It lives in the persistent home volume and survives `-Restart` and `-Rebuild`. tmux only reads its config when a session is created, so run `tmux source-file /opt/sandbox/tmux.conf` to apply changes to the session you're in.
+
 ### Managing instances
 
 Each combination of workspace path + environment name produces a **stable instance**:
